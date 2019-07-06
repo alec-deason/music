@@ -1,7 +1,7 @@
 use music::{
     Env,
     value::{Value, ValueNode,},
-    ugen::WaveTableSynth,
+    oscillator::WaveTableSynth,
     envelope::Linear,
     filter::*,
 };

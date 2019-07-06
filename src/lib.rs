@@ -1,5 +1,5 @@
 pub mod value;
-pub mod ugen;
+pub mod oscillator;
 pub mod filter;
 pub mod envelope;
 
