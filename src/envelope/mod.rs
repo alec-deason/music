@@ -53,9 +53,6 @@ impl ValueNode<f64> for Linear {
             if self.clock > self.attack + self.decay + self.duration + self.release {
                 self.active = false;
             }
-            if (self.clock * 1000.0) as i32 % 100 == 0 && self.clock < self.attack+self.decay {
-                eprintln!("{}", v);
-            }
             v
         } else {
             0.0
