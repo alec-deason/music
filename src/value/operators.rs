@@ -7,23 +7,27 @@ macro_rules! value_binary_operator {
                 value::{Value, ValueNode},
                 Env,
             };
-            pub struct Operator<'a, T> {
-                a: Value<'a, T>,
-                b: Value<'a, T>,
+            pub struct Operator<T> {
+                a: Value<T>,
+                b: Value<T>,
             }
-            impl<'a, T> ValueNode<T> for Operator<'a, T>
-                where T: $operator_name<Output = T> {
+            impl<T> ValueNode<T> for Operator<T>
+                where T: $operator_name<Output = T> + 'static {
                     fn next(&mut self, env: &Env) -> T {
                         let a = self.a.next(env);
                         let b = self.b.next(env);
                         $operation(a, b)
                     }
-            }
-            impl<'a, T> $operator_name for Value<'a, T>
-                where T: $operator_name<Output = T> + 'a {
-                type Output = Value<'a, T>;
 
-                fn $operator_method(self, other: Value<'a, T>) -> Self::Output {
+                    fn to_value(self) -> Value<T> {
+                        Value(Box::new(self))
+                    }
+            }
+            impl<T> $operator_name for Value<T>
+                where T: $operator_name<Output = T> + 'static {
+                type Output = Value<T>;
+
+                fn $operator_method(self, other: Value<T>) -> Self::Output {
                     Value(Box::new(Operator {
                         a: self,
                         b: other,
@@ -53,18 +57,22 @@ mod neg {
         value::{Value, ValueNode},
         Env,
     };
-    pub struct Operator<'a, T> {
-        v: Value<'a, T>,
+    pub struct Operator<T> {
+        v: Value<T>,
     }
-    impl<'a, T> ValueNode<T> for Operator<'a, T>
-        where T: Neg<Output = T> {
+    impl<T> ValueNode<T> for Operator<T>
+        where T: Neg<Output = T> + 'static{
             fn next(&mut self, env: &Env) -> T {
                 -self.v.next(env)
             }
+
+            fn to_value(self) -> Value<T> {
+                Value(Box::new(self))
+            }
     }
-    impl<'a, T> Neg for Value<'a, T>
-        where T: Neg<Output = T> + 'a {
-        type Output = Value<'a, T>;
+    impl<T> Neg for Value<T>
+        where T: Neg<Output = T> + 'static {
+        type Output = Value<T>;
 
         fn neg(self) -> Self::Output {
             Value(Box::new(Operator {
@@ -80,18 +88,22 @@ mod not {
         value::{Value, ValueNode},
         Env,
     };
-    pub struct Operator<'a, T> {
-        v: Value<'a, T>,
+    pub struct Operator<T> {
+        v: Value<T>,
     }
-    impl<'a, T> ValueNode<T> for Operator<'a, T>
-        where T: Not<Output = T> {
+    impl<T> ValueNode<T> for Operator<T>
+        where T: Not<Output = T> + 'static {
             fn next(&mut self, env: &Env) -> T {
                 !self.v.next(env)
             }
+
+            fn to_value(self) -> Value<T> {
+                Value(Box::new(self))
+            }
     }
-    impl<'a, T> Not for Value<'a, T>
-        where T: Not<Output = T> + 'a {
-        type Output = Value<'a, T>;
+    impl<T> Not for Value<T>
+        where T: Not<Output = T> + 'static {
+        type Output = Value<T>;
 
         fn not(self) -> Self::Output {
             Value(Box::new(Operator {

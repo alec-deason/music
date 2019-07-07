@@ -27,10 +27,6 @@ impl Linear {
             clock: 0.0,
         }
     }
-
-    pub fn to_value<'a>(self) -> Value<'a, f64> {
-        Value(Box::new(self))
-    }
 }
 
 
@@ -57,5 +53,9 @@ impl ValueNode<f64> for Linear {
         } else {
             0.0
         }
+    }
+
+    fn to_value(self) -> Value<f64> {
+        Value(Box::new(self))
     }
 }

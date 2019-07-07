@@ -31,13 +31,13 @@ lazy_static! {
 }
 
 pub struct WaveTableSynth {
-    frequency: Value<'static, f64>,
+    frequency: Value<f64>,
     table: Vec<f64>,
     position: f64,
 }
 
 impl WaveTableSynth {
-    pub fn sin(frequency: Value<'static, f64>) -> Self {
+    pub fn sin(frequency: Value<f64>) -> Self {
         WaveTableSynth {
             frequency,
             table: SINE.to_vec(),
@@ -45,7 +45,7 @@ impl WaveTableSynth {
         }
     }
 
-    pub fn square(frequency: Value<'static, f64>) -> Self {
+    pub fn square(frequency: Value<f64>) -> Self {
         WaveTableSynth {
             frequency,
             table: SQUARE.to_vec(),
@@ -53,16 +53,12 @@ impl WaveTableSynth {
         }
     }
 
-    pub fn saw(frequency: Value<'static, f64>) -> Self {
+    pub fn saw(frequency: Value<f64>) -> Self {
         WaveTableSynth {
             frequency,
             table: SAW.to_vec(),
             position: 0.0,
         }
-    }
-
-    pub fn to_value(self) -> Value<'static, f64> {
-        Value(Box::new(self))
     }
 }
 
@@ -75,5 +71,9 @@ impl ValueNode<f64> for WaveTableSynth {
             self.position -= len;
         }
         v
+    }
+
+    fn to_value(self) -> Value<f64> {
+        Value(Box::new(self))
     }
 }
