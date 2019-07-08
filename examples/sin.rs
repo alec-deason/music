@@ -21,13 +21,14 @@ fn main() {
     let env = Linear::new(0.01, 1.0, 0.01, 1.0, 0.07).to_value();
     let fq: Value<f64> = 0.5.into();
     let sig = Value(Box::new(RLPF::low_pass(osc1+osc2+osc3, ffreq*ffreq_env + 80.0.into(), fq))) * env;
-    let mut sig = Reverb::new(sig.to_value(), 0.5, 0.1, 4500.0, 1.8);
+    let mut sig = Reverb::new(sig.to_value(), 0.5, 0.1, 4000.0, 1.8);
 
     let env = Env::new(44100);
     let len = 10;
     let mut buffer = vec![0.0; env.sample_rate as usize*len];
     sig.fill_buffer(&env, &mut buffer, 0, env.sample_rate as usize*len);
     for sample in buffer.iter() {
-        io::stdout().write_f32::<LittleEndian>(*sample as f32 / 4.0).unwrap();
+        io::stdout().write_f32::<LittleEndian>(*sample as f32 / 8.0).unwrap();
+        io::stdout().write_f32::<LittleEndian>(*sample as f32 / 8.0).unwrap();
     }
 }

@@ -50,10 +50,11 @@ impl Reverb {
         let dry = CacheValue::new(input);
         let mut temp = Delay::new(dry.clone().to_value(), predelay.into()).to_value();
         let mut wet: Value<f64> = 0.0.into();
+        let things = vec![0.038045169615104804, 0.02999076016847762, 0.04963873923379772, 0.04368894979626656, 0.007460425959828037, 0.02817080130412364, 0.00657126832222354, 0.04779429369666802, 0.004010513054838128, 0.01541601071664956, 0.011602441530870984, 0.0012122872292874213, 0.025404225677194647, 0.0017341472693168261, 0.01003645759720834, 0.04604357296027947];
 
-        for _ in 0..16 {
-            let ltemp = AllPass::new(temp, rand::thread_rng().gen_range(0.001, 0.05), revtime).to_value();
-            let cache = CacheValue::new(RLPF::low_pass(ltemp, lpf.into(), 5.0.into()).to_value());
+        for r in things {
+            let ltemp = AllPass::new(temp, r, revtime).to_value();
+            let cache = CacheValue::new(RLPF::low_pass(ltemp, lpf.into(), 50.0.into()).to_value());
             wet = wet + cache.clone().to_value();
             temp = cache.to_value();
         }
