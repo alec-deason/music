@@ -9,13 +9,13 @@ use super::{
 
 lazy_static! {
     static ref SINE: Vec<(f64, Vec<f64>)> = {
-        let len = 44100;
+        let len = 512;
         vec![(2200.0, 
         (0..len).map(|i| (i as f64 * ((PI*2.0)/len as f64)).sin()).collect()
         )]
     };
     static ref SQUARE: Vec<(f64, Vec<f64>)> = {
-        let len = 2560;
+        let len = 512;
         vec![(22000.0,
         (0..len).map(|i| if i as f64 * ((PI*2.0)/len as f64).sin() > 0.0 { 1.0 } else { -1.0 }).collect()
         )]
