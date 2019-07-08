@@ -5,6 +5,7 @@ pub mod oscillator;
 pub mod filter;
 pub mod envelope;
 pub mod effect;
+pub mod sequence;
 
 #[derive(Clone, Debug)]
 pub struct Env {
