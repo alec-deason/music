@@ -1,3 +1,4 @@
+#![feature(unsized_locals)]
 use std::time::Duration;
 
 pub mod value;
@@ -6,6 +7,7 @@ pub mod filter;
 pub mod envelope;
 pub mod effect;
 pub mod sequence;
+pub mod note;
 
 #[derive(Clone, Debug)]
 pub struct Env {

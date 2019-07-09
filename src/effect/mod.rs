@@ -78,3 +78,33 @@ impl ValueNode<f64> for Reverb {
         Value(Box::new(self))
     }
 }
+
+pub struct RingModulator {
+    input: Value<f64>,
+    modulator: Value<f64>,
+    mix: Value<f64>,
+}
+
+impl RingModulator {
+    pub fn new(input: Value<f64>, modulator: Value<f64>, mix: Value<f64>) -> Self {
+        Self {
+            input,
+            modulator,
+            mix,
+        }
+    }
+}
+
+
+impl ValueNode<f64> for RingModulator {
+    fn next(&mut self, env: &Env) -> f64 {
+        let v = self.input.next(env);
+        let m = self.modulator.next(env);
+        let mix = self.mix.next(env);
+        (1.0-mix)*v + mix*m*v
+    }
+
+    fn to_value(self) -> Value<f64> {
+        Value(Box::new(self))
+    }
+}

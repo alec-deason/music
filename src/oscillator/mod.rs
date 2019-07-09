@@ -1,4 +1,5 @@
 use std::f64::consts::PI;
+use rand::Rng;
 
 use lazy_static::lazy_static;
 
@@ -22,7 +23,7 @@ lazy_static! {
     };
     static ref SAW_BL: Vec<(f64, Vec<f64>)> = {
         let mut tables = vec![];
-        let len = 256;
+        let len = 512;
         let f = 1.0;
         let mut max_f = f*15.0;
         while max_f <= 22050.0 {
@@ -38,7 +39,6 @@ lazy_static! {
                 pi += 1;
             }
             let tf = (44100.0*44100.0)/(2.0*max_f*len as f64);
-            eprintln!("{}", tf);
             tables.push((tf, table.iter().rev().cloned().collect()));
             max_f *= 2.0;
         }
@@ -135,6 +135,46 @@ impl ValueNode<f64> for WaveTableSynth {
     }
 
     fn to_value(self) -> Value<f64> {
+        Value(Box::new(self))
+    }
+}
+
+
+pub struct WhiteNoise;
+
+impl<T> ValueNode<T> for WhiteNoise where T: From<f64> {
+    fn next(&mut self, _env: &Env) -> T {
+        rand::thread_rng().gen_range(-1.0, 1.0).into()
+    }
+
+    fn to_value(self) -> Value<T> {
+        Value(Box::new(self))
+    }
+}
+
+pub struct BrownianNoise {
+    current: f64,
+    wiggle: Value<f64>,
+}
+
+impl BrownianNoise {
+    pub fn new(wiggle: Value<f64>) -> Self {
+        Self {
+            current: 0.0,
+            wiggle,
+        }
+    }
+}
+
+impl<T> ValueNode<T> for BrownianNoise where T: From<f64> {
+    fn next(&mut self, env: &Env) -> T {
+        let wiggle = self.wiggle.next(env).max(0.00001);
+        let step: f64 = rand::thread_rng().gen_range(-wiggle, wiggle).into();
+        self.current = (self.current + step).min(1.0).max(-1.0);
+        self.current.into()
+    }
+
+    fn to_value(self) -> Value<T> {
         Value(Box::new(self))
     }
 }

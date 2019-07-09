@@ -114,6 +114,145 @@ impl<T> ValueNode<T> for AllPass<T> where T: Add<Output = T> + Mul<Output = T> +
     }
 }
 
+enum FilterType {
+    Low,
+    Band,
+    High,
+    Notch,
+    Peak,
+    All,
+}
+pub struct TrapezoidSVF {
+    input: Value<f64>,
+    frequency: Value<f64>,
+    cached_frequency: f64, 
+    q: Value<f64>,
+    cached_q: f64,
+    filter_type: FilterType,
+    k: f64,
+    a1: f64,
+    a2: f64,
+    a3: f64,
+
+    ic1eq: f64,
+    ic2eq: f64,
+}
+
+//From: http://www.cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf
+impl TrapezoidSVF {
+    fn new(filter_type: FilterType, input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+        TrapezoidSVF {
+            input,
+            frequency,
+            q,
+            cached_q: std::f64::NAN,
+            cached_frequency: std::f64::NAN,
+            filter_type: filter_type,
+            k: std::f64::NAN,
+            a1: std::f64::NAN,
+            a2: std::f64::NAN,
+            a3: std::f64::NAN,
+
+            ic1eq: 0.0,
+            ic2eq: 0.0,
+        }
+    }
+
+    fn parameters(&mut self, env: &Env) -> (f64, f64, f64, f64) {
+        let frequency = self.frequency.next(env);
+        let q = self.q.next(env);
+
+        if (frequency != self.cached_frequency) | (q != self.cached_q) {
+            self.cached_frequency = frequency;
+            self.cached_q = q;
+
+            let g = (PI * frequency/env.sample_rate as f64).tan();
+            self.k = 1.0 / q;
+            self.a1 = 1.0 / (1.0 + g * (g + self.k));
+            self.a2 = g * self.a1;
+            self.a3 = g * self.a2;
+        }
+
+        (self.k, self.a1, self.a2, self.a3)
+    }
+
+    pub fn low_pass(input: Value<f64>, cutoff: Value<f64>, q: Value<f64>) -> Self {
+        Self::new(FilterType::Low, input, cutoff, q)
+    }
+
+    pub fn band(input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+        Self::new(FilterType::Band, input, frequency, q)
+    }
+
+    pub fn high(input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+        Self::new(FilterType::Band, input, frequency, q)
+    }
+
+    pub fn notch(input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+        Self::new(FilterType::Band, input, frequency, q)
+    }
+
+    pub fn peak(input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+        Self::new(FilterType::Band, input, frequency, q)
+    }
+
+    pub fn all(input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+        Self::new(FilterType::Band, input, frequency, q)
+    }
+}
+
+impl ValueNode<f64> for TrapezoidSVF {
+    fn next(&mut self, env: &Env) -> f64 {
+        let v0 = self.input.next(env);
+        let (k, a1, a2, a3) = self.parameters(env);
+        let v3 = v0 - self.ic2eq;
+        let v1 = a1*self.ic1eq + a2*v3;
+        let v2 = self.ic2eq + a2*self.ic1eq + a3*v3;
+        self.ic1eq = 2.0*v1 - self.ic1eq;
+        self.ic2eq = 2.0*v2 - self.ic2eq;
+
+        match self.filter_type {
+            FilterType::Low => v2,
+            FilterType::Band => v1,
+            FilterType::High => v0 - k*v1 - v2,
+            FilterType::Notch => v0 - k*v1,
+            FilterType::Peak => 2.0*v2 - v0 + k*v1,
+            FilterType::All => v0 - 2.0*k*v1,
+        }
+    }
+
+    fn to_value(self) -> Value<f64> {
+        Value(Box::new(self))
+    }
+}
+
+pub struct Comb<T> {
+    input: Value<T>,
+    buffer: VecDeque<T>
+}
+
+impl<T: From<f64>> Comb<T> {
+    pub fn new(input: Value<T>, delay: f64) -> Self {
+        let len = delay * 44100.0;
+        Self {
+            input,
+            buffer: (0..len as usize).map(|_| 0.0.into()).collect(),
+        }
+    }
+}
+
+impl<T> ValueNode<T> for Comb<T> where T: Add<Output = T> + Copy + 'static {
+    fn next(&mut self, env: &Env) -> T {
+        let v0 = self.input.next(env);
+        self.buffer.push_back(v0);
+        v0 + self.buffer.pop_front().unwrap()
+    }
+
+    fn to_value(self) -> Value<T> {
+        Value(Box::new(self))
+    }
+}
+
 /*
 pub struct BiQuad {
     input: Value<f64>,
@@ -164,47 +303,4 @@ impl ValueNode<f64> for BiQuad {
     }
 }
 
-pub struct TrapezoidSVF {
-    input: Value<f64>,
-    a1: f64,
-    a2: f64,
-    a3: f64,
-
-    ic1eq: f64,
-    ic2eq: f64,
-}
-
-//From: http://www.cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf
-impl TrapezoidSVF {
-    pub fn low_pass(input: Value<f64>, cutoff: f64, q: f64) -> Self {
-        let g = (PI * cutoff/44100.0).tan();
-        let k = 1.0 / q;
-        let a1 = 1.0 / (1.0 + g * (g + k));
-        let a2 = g * a1;
-        let a3 = g * a2;
-
-        TrapezoidSVF {
-            input,
-            a1,
-            a2,
-            a3,
-
-            ic1eq: 0.0,
-            ic2eq: 0.0,
-        }
-    }
-}
-
-impl ValueNode<f64> for TrapezoidSVF {
-    fn next(&mut self, env: &Env) -> f64 {
-        let v0 = self.input.next(env);
-        let v3 = v0 - self.ic2eq;
-        let v1 = self.a1*self.ic1eq + self.a2*v3;
-        let v2 = self.ic2eq + self.a2*self.ic1eq + self.a3*v3;
-        self.ic1eq = 2.0*v1 - self.ic1eq;
-        self.ic2eq = 2.0*v2 - self.ic2eq;
-
-        v2
-    }
-}
 */

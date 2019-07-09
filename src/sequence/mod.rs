@@ -7,15 +7,15 @@ use crate::{
 };
 
 pub struct SimpleSequence<T> {
-    notes: Vec<(Duration, f64)>,
-    instrument: Box<Fn(Duration, f64) -> Value<T>>,
+    notes: Vec<(Duration, f64, f64)>,
+    instrument: Box<Fn(Duration, f64, f64) -> Value<T>>,
 
     current_notes: VecDeque<Option<Value<T>>>,
     trigger: Duration,
 }
 
 impl<T> SimpleSequence<T> {
-    pub fn new(instrument: Box<Fn(Duration, f64) -> Value<T>>, notes: &[(Duration, f64)], voices: usize) -> Self {
+    pub fn new(instrument: Box<Fn(Duration, f64, f64) -> Value<T>>, notes: &[(Duration, f64, f64)], voices: usize) -> Self {
         SimpleSequence {
             notes: notes.iter().rev().cloned().collect(),
             instrument: instrument,
@@ -29,9 +29,9 @@ impl<T> SimpleSequence<T> {
 impl<T> ValueNode<T> for SimpleSequence<T> where T: From<f64> + Add<Output=T> + 'static {
     fn next(&mut self, env: &Env) -> T {
         if (env.time > self.trigger) & (!self.notes.is_empty()) {
-            let (duration, frequency) = self.notes.pop().unwrap();
+            let (duration, frequency, amplitude) = self.notes.pop().unwrap();
             self.trigger = env.time + duration;
-            self.current_notes[0].replace((self.instrument)(duration, frequency));
+            self.current_notes[0].replace((self.instrument)(duration, frequency, amplitude));
             self.current_notes.rotate_left(1);
         }
 
