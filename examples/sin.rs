@@ -33,11 +33,11 @@ fn bass(duration: Duration, frequency: f64, amp: f64) -> Value<f64> {
 fn vangelis(duration: Duration, frequency: f64, amp: f64) -> Value<f64> {
     let osc1: Value<f64> = WaveTableSynth::saw(frequency.into()).into();
     let lfo: Value<f64> = WaveTableSynth::sin(0.12.into()).into();
-    let osc2: Value<f64> = WaveTableSynth::saw(Value::<f64>::from(frequency) / (Value::<f64>::from(1.0) -lfo * 0.1)).into();
+    let osc2: Value<f64> = WaveTableSynth::saw(frequency / (1.0 -lfo * 0.1)).into();
     let mut sig = osc1 + osc2;
     let env: Value<f64> = Linear::new(0.41, 1.0, 0.0, duration.as_secs_f64(), 0.41).into();
     let fenv: Value<f64> = Linear::new(1.6, 1.0, 0.0, duration.as_secs_f64(), 4.2).into();
-    sig = RLPF::new(sig, Value::<f64>::from(7000.0)*fenv+100.0, 1.0.into()).into();
+    sig = RLPF::new(sig, 7000.0*fenv+100.0, 1.0.into()).into();
     //sig = Reverb::new(sig, 0.5, 0.1, 4000.0, 4.0).into();
     sig * env * amp
 }
@@ -67,8 +67,8 @@ fn snare_drum(_duration: Duration, _frequency: f64, amp: f64) -> Value<f64> {
 }
 
 fn bewww(duration: Duration, frequency: f64, amp: f64) -> Value<f64> {
-    let fenv = Linear::new(0.05, 1.0, 0.09, 0.0, 0.12);
-    let mut sig: Value<f64> = WaveTableSynth::sin(Value::<f64>::from(frequency) * fenv).into();
+    let fenv: Value<f64> = Linear::new(0.05, 1.0, 0.09, 0.0, 0.12).into();
+    let sig: Value<f64> = WaveTableSynth::sin(frequency * fenv).into();
 
     let env = Linear::new(0.05, 1.0, 0.01, 0.2, 0.05);
     sig * env * amp
