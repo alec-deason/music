@@ -9,7 +9,7 @@ use music::{
     Env,
     value::{Value},
     oscillator::*,
-    envelope::Linear,
+    envelope::ADSR,
     filter::*,
     effect::*,
     sequence::*,
@@ -31,8 +31,8 @@ lazy_static! {
 fn bloops(f_mul: f64) -> Value<f64> {
     let sig: Value<f64> = IteratorSequence {
         instrument: Box::new(move |note| {
-            let fenv: Value<f64> = Linear::new(0.01, 0.25, 0.01, 0.1, 0.06).into();
-            let env: Value<f64> = Linear::new(0.01, 1.0, 0.01, note.duration.as_secs_f64() - 0.31, 0.3).into();
+            let fenv: Value<f64> = ADSR::new(0.01, 0.01, 0.25, 0.1, 0.06, 0.01).into();
+            let env: Value<f64> = ADSR::new(0.01, 0.01, 1.0, note.duration.as_secs_f64() - 0.31, 0.3, 0.5).into();
             let sig: Value<f64> = WaveTableSynth::sin(note.frequency * fenv * 4.0 * f_mul).into();
             sig * env * note.amplitude
         }),
@@ -50,7 +50,7 @@ fn swish() -> Value<f64> {
         instrument: Box::new(|note| {
             let attack = note.duration.as_secs_f64() / 2.0;
             let decay = attack;
-            let renv: Value<f64> = Linear::new(attack, 1.0, 0.0, 0.0, decay).into();
+            let renv: Value<f64> = ADSR::new(attack, 0.0, 1.0, 0.0, decay, 1.0).into();
             let mut sig: Value<f64> = BrownianNoise::new(renv).into();
             sig * note.amplitude 
         }),
