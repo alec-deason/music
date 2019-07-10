@@ -30,8 +30,8 @@ lazy_static! {
 
 fn bloops(f_mul: f64) -> Value<f64> {
     let sig: Value<f64> = IteratorSequence::new(move |note| {
-            let fenv: Value<f64> = ADSR::new(0.01, 0.01, 0.25, 0.1, 0.06, 0.01).into();
-            let env: Value<f64> = ADSR::new(0.01, 0.01, 1.0, note.duration.as_secs_f64() - 0.31, 0.3, 0.5).into();
+            let fenv: Value<f64> = ADSR::new().attack(0.01).release(0.01).sustain(0.25).duration(0.1).release(0.06).curve(0.01).into();
+            let env: Value<f64> = ADSR::new().attack(0.01).release(0.01).sustain(1.0).duration(note.duration.as_secs_f64() - 0.31).release(0.3).curve(0.5).into();
             let sig: Value<f64> = WaveTableSynth::sin(note.frequency * fenv * 4.0 * f_mul).into();
             sig * env * note.amplitude
         }).frequency(iter::repeat_with(|| {
@@ -43,8 +43,8 @@ fn bloops(f_mul: f64) -> Value<f64> {
 fn swish() -> Value<f64> {
     let sig: Value<f64> = IteratorSequence::new(|note| {
             let attack = note.duration.as_secs_f64() / 2.0;
-            let decay = attack;
-            let renv: Value<f64> = ADSR::new(attack, 0.0, 1.0, 0.0, decay, 1.0).into();
+            let release = attack;
+            let renv: Value<f64> = ADSR::new().attack(attack).release(0.0).duration(0.0).release(release).into();
             let sig: Value<f64> = BrownianNoise::new(renv).into();
             sig * note.amplitude 
         }).duration(iter::repeat_with(|| Duration::from_millis(rand::thread_rng().gen_range(3000, 15000)))).into();

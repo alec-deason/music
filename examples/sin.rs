@@ -23,8 +23,8 @@ fn bass(duration: Duration, frequency: f64, amp: f64) -> Value<f64> {
     let freq: Value<f64> = (frequency / 2.0).into();
     let osc3: Value<f64> = WaveTableSynth::sin(freq).into();
     let ffreq: Value<f64> = 1800.0.into();
-    let ffreq_env: Value<f64> = ADSR::new(0.01, 0.01, 1.0, duration.as_secs_f64(), 0.1, 1.0).into();
-    let env: Value<f64> = ADSR::new(0.01, 0.01, 1.0, 1.0, 0.07, 1.0).into();
+    let ffreq_env: Value<f64> = ADSR::new().attack(0.01).decay(0.01).sustain(1.0).duration(duration.as_secs_f64()).release(0.1).into();
+    let env: Value<f64> = ADSR::new().attack(0.01).decay(0.01).sustain(1.0).duration(1.0).release(0.07).into();
     let fq: Value<f64> = 0.5.into();
     let sig: Value<f64> = RLPF::new(osc1+osc2+osc3, ffreq*ffreq_env + 80.0, fq).into();
     sig * env * amp
@@ -35,8 +35,8 @@ fn vangelis(duration: Duration, frequency: f64, amp: f64) -> Value<f64> {
     let lfo: Value<f64> = WaveTableSynth::sin(0.12.into()).into();
     let osc2: Value<f64> = WaveTableSynth::saw(frequency / (1.0 -lfo * 0.1)).into();
     let mut sig = osc1 + osc2;
-    let env: Value<f64> = ADSR::new(0.41, 0.0, 1.0, duration.as_secs_f64(), 0.41, 1.0).into();
-    let fenv: Value<f64> = ADSR::new(1.6, 0.0, 1.0, duration.as_secs_f64(), 4.2, 1.0).into();
+    let env: Value<f64> = ADSR::new().attack(0.41).decay(0.0).sustain(1.0).duration(duration.as_secs_f64()).release(0.41).into();
+    let fenv: Value<f64> = ADSR::new().attack(1.6).decay(0.0).sustain(1.0).duration(duration.as_secs_f64()).release(4.2).into();
     sig = RLPF::new(sig, 7000.0*fenv+100.0, 1.0.into()).into();
     //sig = Reverb::new(sig, 0.5, 0.1, 4000.0, 4.0).into();
     sig * env * amp
@@ -45,32 +45,32 @@ fn vangelis(duration: Duration, frequency: f64, amp: f64) -> Value<f64> {
 fn kick_drum(_duration: Duration, _frequency: f64, amp: f64) -> Value<f64> {
     let click: Value<f64> = WhiteNoise.into();
     let click: Value<f64> = click * 0.025;
-    let cenv = ADSR::new(0.001, 0.01, 1.0, 0.0, 0.0, 1.0);
-    let oenv: Value<f64> = ADSR::new(0.001, 0.09, 1.0, 0.0, 0.06, 1.0).into();
+    let cenv: Value<f64> = ADSR::new().attack(0.001).decay(0.01).sustain(1.0).duration(0.0).release(0.0).into();
+    let oenv: Value<f64> = ADSR::new().attack(0.001).decay(0.09).sustain(1.0).duration(0.0).release(0.06).into();
     let osc = WaveTableSynth::sin(58.0 * oenv);
-    let env = ADSR::new(0.001, 0.0, 1.0, 0.02, 0.005, 1.0);
+    let env: Value<f64> = ADSR::new().attack(0.001).decay(0.0).sustain(1.0).duration(0.02).release(0.005).into();
     ((click * cenv) + osc) * env * amp
 }
 
 fn snare_drum(_duration: Duration, _frequency: f64, amp: f64) -> Value<f64> {
     let click: Value<f64> = WhiteNoise.into();
     let click: Value<f64> = click * 0.025;
-    let cenv = ADSR::new(0.001, 0.01, 1.0, 0.0, 0.0, 1.0);
-    let oenv: Value<f64> = ADSR::new(0.001, 0.09, 1.0, 0.0, 0.06, 1.0).into();
+    let cenv: Value<f64> = ADSR::new().attack(0.001).decay(0.01).sustain(1.0).duration(0.0).release(0.0).into();
+    let oenv: Value<f64> = ADSR::new().attack(0.001).decay(0.09).sustain(1.0).duration(0.0).release(0.06).into();
     let osc: Value<f64> = WaveTableSynth::sin(200.0 * oenv).into();
     let osc = 0.5 * osc;
-    let renv: Value<f64> = ADSR::new(0.001, 0.09, 1.0, 0.0, 0.12, 1.0).into();
+    let renv: Value<f64> = ADSR::new().attack(0.001).decay(0.09).sustain(1.0).duration(0.0).release(0.12).into();
     let rattle = WhiteNoise;
     let rfilter = RLPF::new(rattle.into(), 1000.0*renv, 1.0.into());
-    let env = ADSR::new(0.001, 0.0, 1.0, 0.02, 0.005, 1.0);
+    let env: Value<f64> = ADSR::new().attack(0.001).decay(0.0).sustain(1.0).duration(0.02).release(0.005).into();
     ((click * cenv) + osc + rfilter) * env * amp
 }
 
 fn bewww(duration: Duration, frequency: f64, amp: f64) -> Value<f64> {
-    let fenv: Value<f64> = ADSR::new(0.05, 0.09, 1.0, 0.0, 0.12, 1.0).into();
+    let fenv: Value<f64> = ADSR::new().attack(0.05).decay(0.09).sustain(1.0).duration(0.0).release(0.12).into();
     let sig: Value<f64> = WaveTableSynth::sin(frequency * fenv).into();
 
-    let env = ADSR::new(0.05, 0.01, 1.0, 0.2, 0.05, 1.0);
+    let env: Value<f64> = ADSR::new().attack(0.05).decay(0.01).sustain(1.0).duration(0.2).release(0.05).into();
     sig * env * amp
 }
 
@@ -78,7 +78,7 @@ fn swish(duration: Duration, frequency: f64, amp: f64) -> Value<f64> {
     //let mut sig: Value<f64> = BrownianNoise::new(0.03).into();
     let attack = duration.as_secs_f64() / 2.0;
     let decay = attack;
-    let renv: Value<f64> = ADSR::new(attack, 0.0, 1.0, 0.0, decay, 1.0).into();
+    let renv: Value<f64> = ADSR::new().attack(attack).decay(0.0).sustain(1.0).duration(0.0).release(decay).into();
     let mut sig: Value<f64> = BrownianNoise::new(renv).into();
     //sig = TrapezoidSVF::band(sig, renv, 0.9.into()).into();
     sig * amp
