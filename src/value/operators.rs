@@ -1,8 +1,8 @@
 macro_rules! value_binary_operator {
-    ( $operator_name:ident, $operator_method:ident, $operation:tt, $( $numeric:ident ),* ) =>  {
+    ( $operator_name:ident, $operator_assign_name:ident, $operator_method:ident, $operator_assign_method:ident, $operation:tt, $( $numeric:ident ),* ) =>  {
         #[allow(non_snake_case)]
         mod $operator_name {
-            use std::ops::$operator_name;
+            use std::ops::{$operator_name, $operator_assign_name};
             use crate::{
                 value::{ValueNode, Value},
                 Env,
@@ -63,16 +63,19 @@ macro_rules! value_binary_operator {
     }
 }
 
-value_binary_operator!(Add, add, +, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
-value_binary_operator!(Sub, sub, -, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
-value_binary_operator!(Mul, mul, *, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
-value_binary_operator!(Div, div, /, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
-value_binary_operator!(BitAnd, bitand, &, bool, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
-value_binary_operator!(BitOr, bitor, |, bool, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
-value_binary_operator!(BitXor, bitxor, ^, bool, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
-value_binary_operator!(Rem, rem, %, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
-value_binary_operator!(Shl, shl, <<, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128 );
-value_binary_operator!(Shr, shr, >>, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
+
+//TODO: I take in idents for the assign versions of the operators but I couldn't figure out how to
+//actually implement those traits so I'm not currently using them.
+value_binary_operator!(Add, AddAssign, add, add_assign, +, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
+value_binary_operator!(Sub, SubAssign, sub, sub_assign, -, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
+value_binary_operator!(Mul, MulAssign, mul, mul_assign, *, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
+value_binary_operator!(Div, DivAssign, div, div_assign, /, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
+value_binary_operator!(BitAnd, BitAndAssign, bitand, bitand_assign, &, bool, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
+value_binary_operator!(BitOr, BitOrAssign, bitor, bitor_assign, |, bool, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
+value_binary_operator!(BitXor, BitXorAssign, bitxor, bitxor_assign, ^, bool, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
+value_binary_operator!(Rem, RemAssign, rem, rem_assign, %, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
+value_binary_operator!(Shl, ShlAssign, shl, shl_assign, <<, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128 );
+value_binary_operator!(Shr, ShrAssign, shr, shr_assign, >>, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
 
 //TODO: I should be able to do these with a similar macro to the binary operators but I was having
 //trouble with types. It only saves a few lines of boilerplate anyway.
