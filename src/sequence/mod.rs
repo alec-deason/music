@@ -7,46 +7,6 @@ use crate::{
     Env,
 };
 
-pub struct SimpleSequence<T> {
-    notes: Vec<(Duration, f64, f64)>,
-    instrument: Box<Fn(Duration, f64, f64) -> Value<T>>,
-
-    current_notes: VecDeque<Option<Value<T>>>,
-    trigger: Duration,
-}
-
-impl<T> SimpleSequence<T> {
-    pub fn new(instrument: Box<Fn(Duration, f64, f64) -> Value<T>>, notes: &[(Duration, f64, f64)], voices: usize) -> Self {
-        SimpleSequence {
-            notes: notes.iter().rev().cloned().collect(),
-            instrument: instrument,
-
-            current_notes: (0..voices).map(|_| None).collect(),
-            trigger: Duration::new(0, 0),
-        }
-    }
-}
-
-impl<T: From<f64> + Add<Output=T>> ValueNode for SimpleSequence<T> {
-    type T = T;
-    fn next(&mut self, env: &Env) -> Self::T {
-        if (env.time > self.trigger) & (!self.notes.is_empty()) {
-            let (duration, frequency, amplitude) = self.notes.pop().unwrap();
-            self.trigger = env.time + duration;
-            self.current_notes[0].replace((self.instrument)(duration, frequency, amplitude));
-            self.current_notes.rotate_left(1);
-        }
-
-        let mut out: T = 0.0.into();
-        for note in &mut self.current_notes {
-            if let Some(note) = note {
-                out = out + note.next(env);
-            }
-        }
-        out
-    }
-}
-
 pub struct Note {
     pub duration: Duration,
     pub amplitude: f64,
@@ -54,20 +14,20 @@ pub struct Note {
 }
 
 pub struct IteratorSequence<T> {
-    pub instrument: Box<Fn(Note) -> Value<T>>,
-    pub duration: Option<Box<dyn Iterator<Item = Duration>>>,
-    pub amplitude: Option<Box<dyn Iterator<Item = f64>>>,
-    pub frequency: Option<Box<dyn Iterator<Item = f64>>>,
+    instrument: Box<Fn(Note) -> Value<T>>,
+    duration: Option<Box<dyn Iterator<Item = Duration>>>,
+    amplitude: Option<Box<dyn Iterator<Item = f64>>>,
+    frequency: Option<Box<dyn Iterator<Item = f64>>>,
 }
 
 struct RunningIteratorSequence<T> {
-    pub instrument: Box<Fn(Note) -> Value<T>>,
-    pub duration: Box<dyn Iterator<Item = Duration>>,
-    pub amplitude: Box<dyn Iterator<Item = f64>>,
-    pub frequency: Box<dyn Iterator<Item = f64>>,
+    instrument: Box<Fn(Note) -> Value<T>>,
+    duration: Box<dyn Iterator<Item = Duration>>,
+    amplitude: Box<dyn Iterator<Item = f64>>,
+    frequency: Box<dyn Iterator<Item = f64>>,
 
-    pub current_notes: VecDeque<Option<Value<T>>>,
-    pub trigger: Duration,
+    current_notes: VecDeque<Option<Value<T>>>,
+    trigger: Duration,
 }
 
 impl<T> IteratorSequence<T> {
@@ -127,6 +87,47 @@ impl<T: From<f64> + Add<Output=T>> ValueNode for RunningIteratorSequence<T> {
                     frequency: frequency.unwrap(),
                 };
                 self.current_notes[0].replace((self.instrument)(note));
+                self.current_notes.rotate_left(1);
+            }
+        }
+
+        let mut out: T = 0.0.into();
+        for note in &mut self.current_notes {
+            if let Some(note) = note {
+                out = out + note.next(env);
+            }
+        }
+        out
+    }
+}
+
+pub struct SimpleSequence<T> {
+    iter: Box<dyn Iterator<Item = (Duration, Value<T>)>>,
+
+    current_notes: VecDeque<Option<Value<T>>>,
+    trigger: Duration,
+}
+
+impl<T> SimpleSequence<T> {
+    pub fn new<I: IntoIterator<Item = (Duration, Value<T>)> + 'static>(iter: I) -> Self {
+        Self {
+            iter: Box::new(iter.into_iter()),
+
+            current_notes: (0..3).map(|_| None).collect(),
+            trigger: Duration::new(0, 0),
+        }
+    }
+}
+
+impl<T: From<f64> + Add<Output=T>> ValueNode for SimpleSequence<T> {
+    type T = T;
+    fn next(&mut self, env: &Env) -> Self::T {
+        if env.time > self.trigger {
+            let note = self.iter.next();
+            if note.is_some() {
+                let (duration, note) = note.unwrap();
+                self.trigger = env.time + duration;
+                self.current_notes[0].replace(note);
                 self.current_notes.rotate_left(1);
             }
         }
