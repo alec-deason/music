@@ -8,7 +8,6 @@ use crate::{
 };
 
 
-
 pub struct RLPF {
     input: Value<f64>,
     cutoff: Value<f64>,
@@ -26,7 +25,7 @@ pub struct RLPF {
 }
 
 impl RLPF {
-    pub fn low_pass(input: Value<f64>, cutoff: Value<f64>, q: Value<f64>) -> Self {
+    pub fn new(input: Value<f64>, cutoff: Value<f64>, q: Value<f64>) -> Self {
         RLPF {
             input,
             cutoff,
@@ -64,8 +63,9 @@ impl RLPF {
 }
 
 
-impl ValueNode<f64> for RLPF {
-    fn next(&mut self, env: &Env) -> f64 {
+impl ValueNode for RLPF {
+    type T = f64;
+    fn next(&mut self, env: &Env) -> Self::T {
         let (a0, b1, b2) = self.parameters(env);
         let v0 = self.input.next(env);
         self.y0 = a0 * v0 + b1 * self.y1 + b2 * self.y2;
@@ -73,10 +73,6 @@ impl ValueNode<f64> for RLPF {
         self.y2 = self.y1;
         self.y1 = self.y0;
         out
-    }
-
-    fn to_value(self) -> Value<f64> {
-        Value(Box::new(self))
     }
 }
 
@@ -87,11 +83,11 @@ pub struct AllPass<T> {
     buff: VecDeque<T>,
 }
 
-impl<T> AllPass<T> where T: From<f64> {
+impl<T: From<f64>> AllPass<T> {
     pub fn new(input: Value<T>, delay: f64, decay: f64) -> Self {
         let k = 0.001f64.powf(delay / decay.abs()) * decay.signum();
         AllPass {
-            input,
+            input: input,
             k: k.into(),
 
             buff: (0..(44100.0*delay) as usize).map(|_| 0.0.into()).collect(),
@@ -99,18 +95,15 @@ impl<T> AllPass<T> where T: From<f64> {
     }
 }
 
-impl<T> ValueNode<T> for AllPass<T> where T: Add<Output = T> + Mul<Output = T> + Neg<Output = T> + From<f64> + Copy + 'static {
-    fn next(&mut self, env: &Env) -> T {
+impl<T: Add<Output = T> + Mul<Output = T> + Neg<Output = T> + From<f64> + Copy> ValueNode for AllPass<T> {
+    type T = T;
+    fn next(&mut self, env: &Env) -> Self::T {
         let x = self.input.next(env);
         let s_d = self.buff.pop_front().unwrap_or_else(|| 0.0.into());
         let s:T = x + self.k * s_d;
         let y:T = -self.k * self.buff[0] + s_d;
         self.buff.push_back(s);
         y
-    }
-
-    fn to_value(self) -> Value<T> {
-        Value(Box::new(self))
     }
 }
 
@@ -122,6 +115,7 @@ enum FilterType {
     Peak,
     All,
 }
+
 pub struct TrapezoidSVF {
     input: Value<f64>,
     frequency: Value<f64>,
@@ -142,9 +136,9 @@ pub struct TrapezoidSVF {
 impl TrapezoidSVF {
     fn new(filter_type: FilterType, input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
         TrapezoidSVF {
-            input,
-            frequency,
-            q,
+            input: input,
+            frequency: frequency,
+            q: q,
             cached_q: std::f64::NAN,
             cached_frequency: std::f64::NAN,
             filter_type: filter_type,
@@ -201,8 +195,9 @@ impl TrapezoidSVF {
     }
 }
 
-impl ValueNode<f64> for TrapezoidSVF {
-    fn next(&mut self, env: &Env) -> f64 {
+impl ValueNode for TrapezoidSVF {
+    type T = f64;
+    fn next(&mut self, env: &Env) -> Self::T {
         let v0 = self.input.next(env);
         let (k, a1, a2, a3) = self.parameters(env);
         let v3 = v0 - self.ic2eq;
@@ -220,19 +215,15 @@ impl ValueNode<f64> for TrapezoidSVF {
             FilterType::All => v0 - 2.0*k*v1,
         }
     }
-
-    fn to_value(self) -> Value<f64> {
-        Value(Box::new(self))
-    }
 }
 
-pub struct Comb<T> {
-    input: Value<T>,
-    buffer: VecDeque<T>
+pub struct Comb<D> where D: ValueNode {
+    input: D,
+    buffer: VecDeque<D::T>
 }
 
-impl<T: From<f64>> Comb<T> {
-    pub fn new(input: Value<T>, delay: f64) -> Self {
+impl<T: From<f64>, D: ValueNode<T=T>> Comb<D> {
+    pub fn new(input: D, delay: f64) -> Self {
         let len = delay * 44100.0;
         Self {
             input,
@@ -241,15 +232,12 @@ impl<T: From<f64>> Comb<T> {
     }
 }
 
-impl<T> ValueNode<T> for Comb<T> where T: Add<Output = T> + Copy + 'static {
-    fn next(&mut self, env: &Env) -> T {
+impl<T: Add<Output = T> + Copy, D: ValueNode<T=T>> ValueNode for Comb<D> {
+    type T = D::T;
+    fn next(&mut self, env: &Env) -> Self::T {
         let v0 = self.input.next(env);
         self.buffer.push_back(v0);
         v0 + self.buffer.pop_front().unwrap()
-    }
-
-    fn to_value(self) -> Value<T> {
-        Value(Box::new(self))
     }
 }
 

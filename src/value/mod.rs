@@ -7,10 +7,10 @@ pub use operators::*;
 
 use super::Env;
 
-pub struct Value<T>(pub Box<ValueNode<T> + 'static>);
-pub trait ValueNode<T> {
-    fn next(&mut self, env: &Env) -> T;
-    fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], offset: usize, samples: usize) {
+pub trait ValueNode {
+    type T;
+    fn next(&mut self, env: &Env) -> Self::T;
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
         let mut env = env.clone();
         let one_sample = 1_000_000_000 / env.sample_rate;
         let one_sample = Duration::new(0, one_sample as u32);
@@ -19,19 +19,41 @@ pub trait ValueNode<T> {
             env.time += one_sample;
         }
     }
-    fn to_value(self) -> Value<T>;
 }
 
-#[derive(Clone)]
+pub struct Value<T>(Box<ValueNode<T=T>>);
+impl<T, D: ValueNode<T=T> + 'static> From<D> for Value<T> {
+    fn from(node: D) -> Self {
+        Value(Box::new(node))
+    }
+}
+
+impl<T> Value<T> {
+    pub fn next(&mut self, env: &Env) -> T {
+        self.0.next(env)
+    }
+    pub fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], offset: usize, samples: usize) {
+        self.0.fill_buffer(env, buffer, offset, samples);
+    }
+}
+
 struct CacheValueState<T> {
     trigger: Duration,
     cached_value: Option<T>,
 }
 
-#[derive(Clone)]
 pub struct CacheValue<T> {
     value: Rc<RefCell<Value<T>>>,
     state: Rc<RefCell<CacheValueState<T>>>
+}
+
+impl<T> Clone for CacheValue<T> {
+    fn clone(&self) -> Self {
+        Self {
+            value: self.value.clone(),
+            state: self.state.clone(),
+        }
+    }
 }
 
 impl<T> CacheValue<T> {
@@ -47,8 +69,8 @@ impl<T> CacheValue<T> {
 }
 
 
-use std::fmt::Display;
-impl<T: 'static> ValueNode<T> for CacheValue<T> where T: Clone + Display {
+impl<T: Clone> ValueNode for CacheValue<T> {
+    type T = T;
     fn next(&mut self, env: &Env) -> T {
         let mut state = self.state.borrow_mut();
         if (state.cached_value.is_none()) || (state.trigger != env.time) {
@@ -61,45 +83,16 @@ impl<T: 'static> ValueNode<T> for CacheValue<T> where T: Clone + Display {
             v
         }
     }
-
-    fn to_value(self) -> Value<T> {
-        Value(Box::new(self))
-    }
 }
 
-impl<T> From<T> for Value<T>
-    where T: ValueNode<T> + 'static {
-    fn from(src: T) -> Value<T> {
-        Value(Box::new(src))
-    }
+macro_rules! value_node_impl_for_numerics {
+    ( $($t:ident)* ) => ($(
+        impl ValueNode for $t {
+            type T = $t;
+            fn next(&mut self, _env: &Env) -> Self::T {
+                *self
+            }
+        }
+    )*)
 }
-
-impl<T: 'static> ValueNode<T> for Value<T> {
-    fn next(&mut self, env: &Env) -> T {
-        self.0.next(env)
-    }
-
-    fn to_value(self) -> Value<T> {
-        Value(Box::new(self))
-    }
-}
-
-impl ValueNode<f32> for f32 {
-    fn next(&mut self, _env: &Env) -> f32 {
-        *self
-    }
-
-    fn to_value(self) -> Value<f32> {
-        Value(Box::new(self))
-    }
-}
-
-impl ValueNode<f64> for f64 {
-    fn next(&mut self, _env: &Env) -> f64 {
-        *self
-    }
-
-    fn to_value(self) -> Value<f64> {
-        Value(Box::new(self))
-    }
-}
+value_node_impl_for_numerics! { usize u8 u16 u32 u64 u128 isize i8 i16 i32 i64 i128 f32 f64 }

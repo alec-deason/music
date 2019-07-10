@@ -57,6 +57,7 @@ lazy_static! {
     };
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Sine {
     frequency: f64,
     clock: u32,
@@ -70,26 +71,23 @@ impl Sine {
     }
 }
 
-impl ValueNode<f64> for Sine {
-    fn next(&mut self, env: &Env) -> f64 {
+impl ValueNode for Sine {
+    type T = f64;
+    fn next(&mut self, env: &Env) -> Self::T {
         let v = (2.0*PI*self.clock as f64*(self.frequency/env.sample_rate as f64)).sin();
         self.clock += 1;
         v
     }
-
-    fn to_value(self) -> Value<f64> {
-        Value(Box::new(self))
-    }
 }
 
-pub struct WaveTableSynth {
-    frequency: Value<f64>,
+pub struct WaveTableSynth<T> {
+    frequency: Value<T>,
     tables: Vec<(f64, Vec<f64>)>,
     position: f64,
 }
 
-impl WaveTableSynth {
-    pub fn sin(frequency: Value<f64>) -> Self {
+impl<T> WaveTableSynth<T> {
+    pub fn sin(frequency: Value<T>) -> Self {
         WaveTableSynth {
             frequency,
             tables: SINE.to_vec(),
@@ -97,7 +95,7 @@ impl WaveTableSynth {
         }
     }
 
-    pub fn square(frequency: Value<f64>) -> Self {
+    pub fn square(frequency: Value<T>) -> Self {
         WaveTableSynth {
             frequency,
             tables: SQUARE.to_vec(),
@@ -105,7 +103,7 @@ impl WaveTableSynth {
         }
     }
 
-    pub fn saw(frequency: Value<f64>) -> Self {
+    pub fn saw(frequency: Value<T>) -> Self {
         WaveTableSynth {
             frequency,
             tables: SAW_BL.to_vec(),
@@ -114,9 +112,10 @@ impl WaveTableSynth {
     }
 }
 
-impl ValueNode<f64> for WaveTableSynth {
-    fn next(&mut self, env: &Env) -> f64 {
-        let freq = self.frequency.next(env);
+impl<T: Into<f64> + From<f64>> ValueNode for WaveTableSynth<T> {
+    type T = T;
+    fn next(&mut self, env: &Env) -> Self::T {
+        let freq: f64 = self.frequency.next(env).into();
         let mut table = &self.tables[0].1;
         for (cap, t) in &self.tables {
             table = t;
@@ -131,34 +130,28 @@ impl ValueNode<f64> for WaveTableSynth {
         while self.position >= len {
             self.position -= len;
         }
-        v
-    }
-
-    fn to_value(self) -> Value<f64> {
-        Value(Box::new(self))
+        v.into()
     }
 }
 
 
+#[derive(Copy, Clone, Debug)]
 pub struct WhiteNoise;
 
-impl<T> ValueNode<T> for WhiteNoise where T: From<f64> {
-    fn next(&mut self, _env: &Env) -> T {
+impl ValueNode for WhiteNoise {
+    type T = f64;
+    fn next(&mut self, _env: &Env) -> Self::T {
         rand::thread_rng().gen_range(-1.0, 1.0).into()
     }
-
-    fn to_value(self) -> Value<T> {
-        Value(Box::new(self))
-    }
 }
 
-pub struct BrownianNoise {
+pub struct BrownianNoise<T> {
     current: f64,
-    wiggle: Value<f64>,
+    wiggle: Value<T>,
 }
 
-impl BrownianNoise {
-    pub fn new(wiggle: Value<f64>) -> Self {
+impl<T> BrownianNoise<T> {
+    pub fn new(wiggle: Value<T>) -> Self {
         Self {
             current: 0.0,
             wiggle,
@@ -166,15 +159,13 @@ impl BrownianNoise {
     }
 }
 
-impl<T> ValueNode<T> for BrownianNoise where T: From<f64> {
-    fn next(&mut self, env: &Env) -> T {
-        let wiggle = self.wiggle.next(env).max(0.00001);
+impl<T: From<f64> + Into<f64>> ValueNode for BrownianNoise<T> {
+    type T = T;
+    fn next(&mut self, env: &Env) -> Self::T {
+        let wiggle:f64 = self.wiggle.next(env).into();
+        let wiggle = wiggle.max(0.00001);
         let step: f64 = rand::thread_rng().gen_range(-wiggle, wiggle).into();
         self.current = (self.current + step).min(1.0).max(-1.0);
         self.current.into()
-    }
-
-    fn to_value(self) -> Value<T> {
-        Value(Box::new(self))
     }
 }

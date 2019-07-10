@@ -26,8 +26,9 @@ impl<T> SimpleSequence<T> {
     }
 }
 
-impl<T> ValueNode<T> for SimpleSequence<T> where T: From<f64> + Add<Output=T> + 'static {
-    fn next(&mut self, env: &Env) -> T {
+impl<T: From<f64> + Add<Output=T>> ValueNode for SimpleSequence<T> {
+    type T = T;
+    fn next(&mut self, env: &Env) -> Self::T {
         if (env.time > self.trigger) & (!self.notes.is_empty()) {
             let (duration, frequency, amplitude) = self.notes.pop().unwrap();
             self.trigger = env.time + duration;
@@ -42,9 +43,5 @@ impl<T> ValueNode<T> for SimpleSequence<T> where T: From<f64> + Add<Output=T> + 
             }
         }
         out
-    }
-
-    fn to_value(self) -> Value<T> {
-        Value(Box::new(self))
     }
 }

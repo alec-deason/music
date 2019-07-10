@@ -1,5 +1,5 @@
 use crate::{
-    value::{ValueNode, Value},
+    value::{ValueNode},
     Env,
 };
 
@@ -30,8 +30,9 @@ impl Linear {
 }
 
 
-impl ValueNode<f64> for Linear {
-    fn next(&mut self, env: &Env) -> f64 {
+impl ValueNode for Linear {
+    type T = f64;
+    fn next(&mut self, env: &Env) -> Self::T {
         if self.active {
             let v = if self.clock < self.attack {
                 let d = self.attack - self.clock;
@@ -53,9 +54,5 @@ impl ValueNode<f64> for Linear {
         } else {
             0.0
         }
-    }
-
-    fn to_value(self) -> Value<f64> {
-        Value(Box::new(self))
     }
 }

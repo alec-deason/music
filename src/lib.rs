@@ -1,4 +1,3 @@
-#![feature(unsized_locals)]
 use std::time::Duration;
 
 pub mod value;
