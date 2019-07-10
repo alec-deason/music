@@ -54,7 +54,7 @@ impl Reverb {
             let cache = CacheValue::new(
                 RLPF::new(ltemp.into(), lpf.into(), 50.0.into()).into()
             );
-            wet = wet + cache.clone().into();
+            wet = wet + Value::<f64>::from(cache.clone());
             temp = cache.into();
         }
 
