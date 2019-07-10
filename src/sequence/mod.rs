@@ -55,6 +55,13 @@ pub struct Note {
 
 pub struct IteratorSequence<T> {
     pub instrument: Box<Fn(Note) -> Value<T>>,
+    pub duration: Option<Box<dyn Iterator<Item = Duration>>>,
+    pub amplitude: Option<Box<dyn Iterator<Item = f64>>>,
+    pub frequency: Option<Box<dyn Iterator<Item = f64>>>,
+}
+
+struct RunningIteratorSequence<T> {
+    pub instrument: Box<Fn(Note) -> Value<T>>,
     pub duration: Box<dyn Iterator<Item = Duration>>,
     pub amplitude: Box<dyn Iterator<Item = f64>>,
     pub frequency: Box<dyn Iterator<Item = f64>>,
@@ -63,24 +70,51 @@ pub struct IteratorSequence<T> {
     pub trigger: Duration,
 }
 
-impl Default for IteratorSequence<f64> {
-    fn default() -> Self {
-        IteratorSequence {
-            instrument: Box::new(|_| 0.0.into()),
-            duration: Box::new(iter::repeat(Duration::new(1, 0))),
-            frequency: Box::new(iter::repeat(440.0)),
-            amplitude: Box::new(iter::repeat(1.0)),
-
-            current_notes: (0..3).map(|_| None).collect(),
-            trigger: Duration::new(0, 0),
+impl<T> IteratorSequence<T> {
+    pub fn new<F: Fn(Note) -> Value<T> + 'static>(instrument: F) -> Self {
+        Self {
+            instrument: Box::new(instrument),
+            duration: None,
+            amplitude: None,
+            frequency: None,
         }
+    }
+
+    pub fn duration<I: Iterator<Item = Duration> + 'static>(mut self, duration: I) -> Self {
+        self.duration = Some(Box::new(duration));
+        self
+    }
+
+    pub fn amplitude<I: Iterator<Item = f64> + 'static>(mut self, amplitude: I) -> Self {
+        self.amplitude = Some(Box::new(amplitude));
+        self
+    }
+
+    pub fn frequency<I: Iterator<Item = f64> + 'static>(mut self, frequency: I) -> Self {
+        self.frequency = Some(Box::new(frequency));
+        self
     }
 }
 
-impl<T: From<f64> + Add<Output=T>> ValueNode for IteratorSequence<T> {
+impl<T: From<f64> + Add<Output = T> + 'static> From<IteratorSequence<T>> for Value<T> {
+    fn from(iterator: IteratorSequence<T>) -> Value<T> {
+        let running = RunningIteratorSequence {
+            instrument: iterator.instrument,
+            duration: iterator.duration.unwrap_or_else(|| Box::new(iter::repeat(Duration::new(1, 0)))),
+            amplitude: iterator.amplitude.unwrap_or_else(|| Box::new(iter::repeat(1.0))),
+            frequency: iterator.frequency.unwrap_or_else(|| Box::new(iter::repeat(440.0))),
+
+            current_notes: (0..3).map(|_| None).collect(),
+            trigger: Duration::new(0, 0),
+        };
+        running.into()
+    }
+}
+
+impl<T: From<f64> + Add<Output=T>> ValueNode for RunningIteratorSequence<T> {
     type T = T;
     fn next(&mut self, env: &Env) -> Self::T {
-        if (env.time > self.trigger) {
+        if env.time > self.trigger {
             let duration = self.duration.next();
             let frequency = self.frequency.next();
             let amplitude = self.amplitude.next();

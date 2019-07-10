@@ -29,34 +29,25 @@ lazy_static! {
 }
 
 fn bloops(f_mul: f64) -> Value<f64> {
-    let sig: Value<f64> = IteratorSequence {
-        instrument: Box::new(move |note| {
+    let sig: Value<f64> = IteratorSequence::new(move |note| {
             let fenv: Value<f64> = ADSR::new(0.01, 0.01, 0.25, 0.1, 0.06, 0.01).into();
             let env: Value<f64> = ADSR::new(0.01, 0.01, 1.0, note.duration.as_secs_f64() - 0.31, 0.3, 0.5).into();
             let sig: Value<f64> = WaveTableSynth::sin(note.frequency * fenv * 4.0 * f_mul).into();
             sig * env * note.amplitude
-        }),
-        frequency: Box::new(iter::repeat_with(|| {
+        }).frequency(iter::repeat_with(|| {
             (*SCALE.choose(&mut rand::thread_rng()).unwrap() as f64).frequency_from_midi()
-        })),
-        duration: Box::new(iter::repeat_with(|| Duration::from_millis(rand::thread_rng().gen_range(610, 800)))),
-        ..Default::default()
-    }.into();
+        })).duration(iter::repeat_with(|| Duration::from_millis(rand::thread_rng().gen_range(610, 800)))).into();
     sig * 0.2
 }
 
 fn swish() -> Value<f64> {
-    let sig: Value<f64> = IteratorSequence {
-        instrument: Box::new(|note| {
+    let sig: Value<f64> = IteratorSequence::new(|note| {
             let attack = note.duration.as_secs_f64() / 2.0;
             let decay = attack;
             let renv: Value<f64> = ADSR::new(attack, 0.0, 1.0, 0.0, decay, 1.0).into();
-            let mut sig: Value<f64> = BrownianNoise::new(renv).into();
+            let sig: Value<f64> = BrownianNoise::new(renv).into();
             sig * note.amplitude 
-        }),
-        duration: Box::new(iter::repeat_with(|| Duration::from_millis(rand::thread_rng().gen_range(3000, 15000)))),
-        ..Default::default()
-    }.into();
+        }).duration(iter::repeat_with(|| Duration::from_millis(rand::thread_rng().gen_range(3000, 15000)))).into();
     sig * 0.01
 }
 
