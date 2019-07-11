@@ -1,5 +1,7 @@
 #![feature(duration_float)]
 
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::env;
 use std::iter;
 use std::time::Duration;
@@ -58,28 +60,54 @@ fn basic_chord(chord: &[f64], duration: Duration) -> Value<f64> {
     sig / chord.len() as f64
 }
 
-fn outline_chord_structure(chord_len: usize, length: Duration, beat: Duration) -> (Duration, Vec<(Duration, usize)>) {
+fn outline_chord_structure(chord_len: usize, length: Duration, beat: Duration, root_first: bool, density: f64) -> (Duration, Vec<(Duration, usize, f64)>) {
     let beat = beat / 2;
     let mut current_length = Duration::new(0, 0);
     let mut notes = vec![];
     let durations = vec![1, 2, 2, 3, 3, 3, 4, 4, 4];
     while current_length < length {
-        let idx = rand::thread_rng().gen_range(0, chord_len);
+        let idx = if root_first & (notes.len() == 0) {
+            0
+        } else {
+            rand::thread_rng().gen_range(0, chord_len)
+        };
         let duration = beat * *durations.choose(&mut rand::thread_rng()).unwrap();
-        notes.push((duration, idx));
+        let amp = if rand::thread_rng().gen::<f64>() < density {
+            1.0
+        } else {
+            0.0
+        };
+        notes.push((duration, idx, amp));
         current_length += duration;
     }
     (current_length, notes)
 }
 
-fn outline_chord(chord: &[f64], length: Duration, beat: Duration) -> (Duration, Vec<(Duration, f64)>) {
-    let (total_dur, notes) = outline_chord_structure(chord.len(), length, beat);
+fn outline_chord(chord: &[f64], length: Duration, beat: Duration, root_first: bool, density: f64) -> (Duration, Vec<(Duration, f64, f64)>) {
+    let (total_dur, notes) = outline_chord_structure(chord.len(), length, beat, root_first, density);
     (
         total_dur,
-        notes.iter().map(|(d, i)| (*d, chord[*i])).collect()
+        notes.iter().map(|(d, i, a)| (*d, chord[*i], *a)).collect()
     )
 }
 
+fn unzip3<A, B, C, FromA, FromB, FromC>(src: impl Iterator<Item=(A, B, C)>) -> (FromA, FromB, FromC) where
+        FromA: Default + Extend<A>,
+        FromB: Default + Extend<B>,
+        FromC: Default + Extend<C>,
+{
+    let mut ts: FromA = Default::default();
+    let mut us: FromB = Default::default();
+    let mut vs: FromC = Default::default();
+
+    src.for_each(|(t, u, v)| {
+        ts.extend(Some(t));
+        us.extend(Some(u));
+        vs.extend(Some(v));
+    });
+
+    (ts, us, vs)
+}
 fn main() {
     let scale: Vec<f64> = {
         let mut scale: Vec<f64> = MAJOR.iter().fold(vec![69.0], |mut acc, x| {
@@ -89,58 +117,94 @@ fn main() {
             acc
         });
         scale.remove(0);
-        scale.extend(scale.clone().iter().map(|x| x+12.0));
+        scale.extend(scale.clone().iter().map(|x| x));
         scale
     };
 
-    let chord_class = iter::repeat(vec![0, 4, 7]); // Major triads
-    //let chord_root = [0, 3, 4, 4, 0, 3, 4, 0].iter().cycle(); // I-IV-V-V - I-IV-V-I progression
+    let chords = "I-ii-iii-IV-V-IV-iii-ii-I".split("-").map(|n| parse_roman_numeral_notation(n)).cycle();
 
-    let chord_root = [0, 0, 0, 0, 3, 3, 0, 0, 4, 3].iter().cycle();
     let arpeggio_duration = Duration::from_millis(2500);
+    let density = Rc::new(RefCell::new(-0.1f64));
+    let mut density_delta = 0.1;
+    let mut measure_clock = 0;
+
     let scale1 = scale.clone();
-    let mut sig: Value<f64> = SimpleSequence::new(
-        chord_root.clone().zip(chord_class.clone())
-        .map(move |(r, cs)| cs.iter().map(|c| scale1[(c+r) as usize] - 12.0).collect::<Vec<f64>>())
+    let density1 = density.clone();
+    let top_notes: Value<f64> = SimpleSequence::new(
+        chords.clone().map(move |cs| cs.iter().map(|c| scale1[*c]).collect::<Vec<f64>>())
         .map(move |chord| {
-            let (dur, notes) = outline_chord(&chord, arpeggio_duration, arpeggio_duration / 8);
-            let (durations, frequencies): (Vec<_>, Vec<_>) = notes.iter().cloned().unzip();
-            (dur, IteratorSequence::new(chirp).duration(durations).frequency(frequencies.into_iter().map(|x| x.frequency_from_midi())).into())
+            let (dur, notes) = outline_chord(&chord, arpeggio_duration, arpeggio_duration / 8, false, if *density1.borrow() > 0.0 {1.0} else {0.0});
+            let nd = (*density1.borrow() + density_delta).min(1.5);
+            *density1.borrow_mut() = nd;
+            measure_clock += 1;
+            if measure_clock == 17 {
+                density_delta *= -1.0;
+            }
+            let (durations, frequencies, amps): (Vec<_>, Vec<_>, Vec<_>) = unzip3(notes.iter().cloned());
+            (dur, IteratorSequence::new(chirp).duration(durations).frequency(frequencies.into_iter().map(|x| x.frequency_from_midi())).amplitude(amps).into())
         })).into();
 
     let scale1 = scale.clone();
-    let (theme_dur, theme_notes) = outline_chord_structure(3, arpeggio_duration, arpeggio_duration / 8);
-    let bass: Value<f64> = SimpleSequence::new(
-        chord_root.clone().zip(chord_class.clone())
-        .map(move |(r, cs)| cs.iter().map(|c| scale1[(c+r) as usize]).collect::<Vec<f64>>())
+    let density1 = density.clone();
+    let (mut theme_dur, mut theme_notes) = outline_chord_structure(3, arpeggio_duration, arpeggio_duration / 8, false, *density1.borrow() - 0.1);
+    let structure: Value<f64> = SimpleSequence::new(
+        chords.clone().map(move |cs| cs.iter().map(|c| scale1[*c] + 12.0).collect::<Vec<f64>>())
         .map(move |chord| {
-            let (durations, frequencies): (Vec<_>, Vec<_>) = theme_notes.iter().map(|(d, i)| (*d, chord[*i])).unzip();
-            (theme_dur, IteratorSequence::new(chirp).duration(durations).frequency(frequencies.into_iter().map(|x| x.frequency_from_midi())).into())
+            if rand::thread_rng().gen::<f64>() > 0.7 {
+                let (ndur, nnotes) = outline_chord_structure(3, arpeggio_duration, arpeggio_duration / 8, false, *density1.borrow() - 0.1);
+                theme_dur = ndur;
+                theme_notes = nnotes;
+            }
+            let (durations, frequencies, amp): (Vec<_>, Vec<_>, Vec<_>) = unzip3(theme_notes.iter().map(|(d, i, a)| (*d, chord[*i], *a)));
+            (theme_dur, IteratorSequence::new(chirp).duration(durations).frequency(frequencies.into_iter().map(|x| x.frequency_from_midi())).amplitude(amp).into())
         })).into();
 
     let scale1 = scale.clone();
-    let fill: Value<f64> = SimpleSequence::new(
-        chord_root.clone().zip(chord_class.clone())
-        .map(move |(r, cs)| cs.iter().map(|c| scale1[(c+r) as usize] - 36.0).collect::<Vec<f64>>())
+    let density1 = density.clone();
+    let pad: Value<f64> = SimpleSequence::new(
+        chords.clone().map(move |cs| cs.iter().map(|c| scale1[*c] - 24.0).collect::<Vec<f64>>())
         .map(move |chord| {
-            let (dur, notes) = outline_chord(&chord, arpeggio_duration, arpeggio_duration / 4);
-            let (durations, frequencies): (Vec<_>, Vec<_>) = notes.iter().cloned().unzip();
-            (dur, IteratorSequence::new(chirp).duration(durations).frequency(frequencies.into_iter().map(|x| x.frequency_from_midi())).into())
+            let note = Note {
+                duration: arpeggio_duration,
+                frequency: chord[0].frequency_from_midi(),
+                amplitude: if *density1.borrow() >= -0.2 {1.0} else {0.0},
+            };
+            (arpeggio_duration, chirp(note))
         })).into();
 
-    sig = fill + sig + bass;
+    let scale1 = scale.clone();
+    let density1 = density.clone();
+    let bass_line: Value<f64> = SimpleSequence::new(
+        chords.clone().map(move |cs| cs.iter().map(|c| scale1[*c] - 36.0).collect::<Vec<f64>>())
+        .map(move |chord| {
+            let root = chord[0].frequency_from_midi();
+            let mut notes = vec![];
+            for _ in 0..8 {
+                let note = Note {
+                    duration: arpeggio_duration / 8,
+                    frequency: root,
+                    amplitude: if *density1.borrow() > 0.0 {1.0} else {0.0},
+                };
+                notes.push((arpeggio_duration / 8, chirp(note)));
+            }
+            (arpeggio_duration, SimpleSequence::new(notes).into())
+        })).into();
+
+    let mut sig = pad + bass_line + top_notes + structure;
     sig = Reverb::new(sig, 0.8, 0.1, 2000.0, 4.8).into();
 
-    let env = Env::new(44100);
+    let mut env = Env::new(44100);
     let len = env::args().into_iter().nth(1).unwrap_or("10".to_string()).parse::<usize>().unwrap();
-    let mut buffer_left = vec![0.0; env.sample_rate as usize*len];
-    sig.fill_buffer(&env, &mut buffer_left, 0, env.sample_rate as usize*len);
-    let mut buffer_right = vec![0.0; (env.sample_rate as f64 * 0.05) as usize];
-    buffer_right.extend(buffer_left.iter());
-    let amp = 0.25;
-    for (left, right) in buffer_left.iter().zip(buffer_right) {
-        io::stdout().write_f32::<LittleEndian>(*left as f32 * amp).unwrap();
-        io::stdout().write_f32::<LittleEndian>(right as f32 * amp).unwrap();
+    let chunk_size = 2048;
+    let total_samples = env.sample_rate as usize*len;
+    for _ in 0..total_samples / chunk_size {
+        let mut buffer_left = vec![0.0; chunk_size];
+        sig.fill_buffer(&mut env, &mut buffer_left, 0, chunk_size);
+        let amp = 0.25;
+        for left in buffer_left {
+            io::stdout().write_f32::<LittleEndian>(left as f32 * amp).unwrap();
+            io::stdout().write_f32::<LittleEndian>(left as f32 * amp).unwrap();
+        }
     }
 
 }

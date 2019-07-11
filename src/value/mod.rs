@@ -10,8 +10,7 @@ use super::Env;
 pub trait ValueNode {
     type T;
     fn next(&mut self, env: &Env) -> Self::T;
-    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
-        let mut env = env.clone();
+    fn fill_buffer(&mut self, env: &mut Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
         let one_sample = 1_000_000_000 / env.sample_rate;
         let one_sample = Duration::new(0, one_sample as u32);
         for i in 0..samples {
@@ -32,7 +31,7 @@ impl<T> Value<T> {
     pub fn next(&mut self, env: &Env) -> T {
         self.0.next(env)
     }
-    pub fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], offset: usize, samples: usize) {
+    pub fn fill_buffer(&mut self, env: &mut Env, buffer: &mut [T], offset: usize, samples: usize) {
         self.0.fill_buffer(env, buffer, offset, samples);
     }
 }
