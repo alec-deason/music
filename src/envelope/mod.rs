@@ -60,7 +60,7 @@ impl From<ADSR> for Value<f64> {
         RunningADSR {
             attack: adsr.attack.unwrap_or(0.1),
             sustain_level: adsr.sustain_level.unwrap_or(1.0),
-            decay: adsr.decay.unwrap_or(0.1),
+            decay: adsr.decay.unwrap_or(0.0),
             duration: adsr.duration.unwrap_or(1.0),
             release: adsr.release.unwrap_or(0.1),
             curve: adsr.curve.unwrap_or(1.0),

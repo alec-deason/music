@@ -2,7 +2,7 @@ macro_rules! value_binary_operator {
     ( $operator_name:ident, $operator_assign_name:ident, $operator_method:ident, $operator_assign_method:ident, $operation:tt, $( $numeric:ident ),* ) =>  {
         #[allow(non_snake_case)]
         mod $operator_name {
-            use std::ops::{$operator_name, $operator_assign_name};
+            use std::ops::{$operator_name,};
             use crate::{
                 value::{ValueNode, Value},
                 Env,
@@ -22,19 +22,7 @@ macro_rules! value_binary_operator {
                     }
             }
 
-            impl<T: $operator_name<Output = T> + 'static> $operator_name<Value<T>> for Value<T> {
-                type Output = Value<T>;
-
-                #[inline]
-                fn $operator_method(self, other: Value<T>) -> Self::Output {
-                    Operator {
-                        a: self,
-                        b: other,
-                    }.into()
-                }
-            }
-
-            impl<T: $operator_name<Output = T> + 'static, D: ValueNode<T=T> + 'static> $operator_name<D> for Value<T> {
+            impl<T: $operator_name<Output = T> + 'static, D: Into<Value<T>>> $operator_name<D> for Value<T> {
                 type Output = Value<T>;
 
                 #[inline]

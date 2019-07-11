@@ -87,25 +87,25 @@ pub struct WaveTableSynth<T> {
 }
 
 impl<T> WaveTableSynth<T> {
-    pub fn sin(frequency: Value<T>) -> Self {
+    pub fn sin(frequency: impl Into<Value<T>>) -> Self {
         WaveTableSynth {
-            frequency,
+            frequency: frequency.into(),
             tables: SINE.to_vec(),
             position: 0.0,
         }
     }
 
-    pub fn square(frequency: Value<T>) -> Self {
+    pub fn square(frequency: impl Into<Value<T>>) -> Self {
         WaveTableSynth {
-            frequency,
+            frequency: frequency.into(),
             tables: SQUARE.to_vec(),
             position: 0.0,
         }
     }
 
-    pub fn saw(frequency: Value<T>) -> Self {
+    pub fn saw(frequency: impl Into<Value<T>>) -> Self {
         WaveTableSynth {
-            frequency,
+            frequency: frequency.into(),
             tables: SAW_BL.to_vec(),
             position: 0.0,
         }
@@ -151,10 +151,10 @@ pub struct BrownianNoise<T> {
 }
 
 impl<T> BrownianNoise<T> {
-    pub fn new(wiggle: Value<T>) -> Self {
+    pub fn new(wiggle: impl Into<Value<T>>) -> Self {
         Self {
             current: 0.0,
-            wiggle,
+            wiggle: wiggle.into(),
         }
     }
 }

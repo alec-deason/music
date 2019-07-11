@@ -25,11 +25,11 @@ pub struct RLPF {
 }
 
 impl RLPF {
-    pub fn new(input: Value<f64>, cutoff: Value<f64>, q: Value<f64>) -> Self {
+    pub fn new(input: impl Into<Value<f64>>, cutoff: impl Into<Value<f64>>, q: impl Into<Value<f64>>) -> Self {
         RLPF {
-            input,
-            cutoff,
-            q,
+            input: input.into(),
+            cutoff: cutoff.into(),
+            q: q.into(),
             cached_cutoff: std::f64::NAN,
             cached_q: std::f64::NAN,
             a0: std::f64::NAN,
@@ -84,10 +84,10 @@ pub struct AllPass<T> {
 }
 
 impl<T: From<f64>> AllPass<T> {
-    pub fn new(input: Value<T>, delay: f64, decay: f64) -> Self {
+    pub fn new(input: impl Into<Value<T>>, delay: f64, decay: f64) -> Self {
         let k = 0.001f64.powf(delay / decay.abs()) * decay.signum();
         AllPass {
-            input: input,
+            input: input.into(),
             k: k.into(),
 
             buff: (0..(44100.0*delay) as usize).map(|_| 0.0.into()).collect(),
@@ -134,11 +134,11 @@ pub struct TrapezoidSVF {
 
 //From: http://www.cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf
 impl TrapezoidSVF {
-    fn new(filter_type: FilterType, input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+    fn new(filter_type: FilterType, input: impl Into<Value<f64>>, frequency: impl Into<Value<f64>>, q: impl Into<Value<f64>>) -> Self {
         TrapezoidSVF {
-            input: input,
-            frequency: frequency,
-            q: q,
+            input: input.into(),
+            frequency: frequency.into(),
+            q: q.into(),
             cached_q: std::f64::NAN,
             cached_frequency: std::f64::NAN,
             filter_type: filter_type,
@@ -170,27 +170,27 @@ impl TrapezoidSVF {
         (self.k, self.a1, self.a2, self.a3)
     }
 
-    pub fn low_pass(input: Value<f64>, cutoff: Value<f64>, q: Value<f64>) -> Self {
+    pub fn low_pass(input: impl Into<Value<f64>>, cutoff: impl Into<Value<f64>>, q: impl Into<Value<f64>>) -> Self {
         Self::new(FilterType::Low, input, cutoff, q)
     }
 
-    pub fn band(input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+    pub fn band(input: impl Into<Value<f64>>, frequency: impl Into<Value<f64>>, q: impl Into<Value<f64>>) -> Self {
         Self::new(FilterType::Band, input, frequency, q)
     }
 
-    pub fn high(input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+    pub fn high(input: impl Into<Value<f64>>, frequency: impl Into<Value<f64>>, q: impl Into<Value<f64>>) -> Self {
         Self::new(FilterType::Band, input, frequency, q)
     }
 
-    pub fn notch(input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+    pub fn notch(input: impl Into<Value<f64>>, frequency: impl Into<Value<f64>>, q: impl Into<Value<f64>>) -> Self {
         Self::new(FilterType::Band, input, frequency, q)
     }
 
-    pub fn peak(input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+    pub fn peak(input: impl Into<Value<f64>>, frequency: impl Into<Value<f64>>, q: impl Into<Value<f64>>) -> Self {
         Self::new(FilterType::Band, input, frequency, q)
     }
 
-    pub fn all(input: Value<f64>, frequency: Value<f64>, q: Value<f64>) -> Self {
+    pub fn all(input: impl Into<Value<f64>>, frequency: impl Into<Value<f64>>, q: impl Into<Value<f64>>) -> Self {
         Self::new(FilterType::Band, input, frequency, q)
     }
 }
@@ -240,55 +240,3 @@ impl<T: Add<Output = T> + Copy, D: ValueNode<T=T>> ValueNode for Comb<D> {
         v0 + self.buffer.pop_front().unwrap()
     }
 }
-
-/*
-pub struct BiQuad {
-    input: Value<f64>,
-    a1: f64,
-    a2: f64,
-    b0: f64,
-    b1: f64,
-    b2: f64,
-
-    x1: f64,
-    x2: f64,
-    y1: f64,
-    y2: f64,
-}
-
-impl BiQuad {
-    pub fn low_pass(input: Value<f64>, center_frequency: f64, q: f64) -> Self {
-        let sample_rate = 44100.0;
-        let omega = 2.0 * PI * center_frequency / sample_rate;
-        let cs = omega.sin();
-        let alpha = cs / (2.0 * q);
-        let a0 = 1.0 + alpha;
-        BiQuad {
-            input,
-            a1: (-2.0 * cs) / a0,
-            a2: (1.0 - alpha) / a0,
-            b0: ((1.0 + cs) / 2.0) / a0,
-            b1: (-(1.0 + cs)) / a0,
-            b2: ((1.0 + cs) / 2.0) / a0,
-
-            x1: 0.0,
-            x2: 0.0,
-            y1: 0.0,
-            y2: 0.0,
-        }
-    }
-}
-
-impl ValueNode<f64> for BiQuad {
-    fn next(&mut self, env: &Env) -> f64 {
-        let x = self.input.next(env);
-        let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2 - self.a1 * self.y1 - self.a2 * self.y2;
-        self.x2 = self.x1;
-        self.x1 = x;
-        self.y2 = self.y1;
-        self.y1 = y;
-        y
-    }
-}
-
-*/

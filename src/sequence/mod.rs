@@ -40,18 +40,18 @@ impl<T> IteratorSequence<T> {
         }
     }
 
-    pub fn duration<I: Iterator<Item = Duration> + 'static>(mut self, duration: I) -> Self {
-        self.duration = Some(Box::new(duration));
+    pub fn duration<I: IntoIterator<Item = Duration> + 'static>(mut self, duration: I) -> Self {
+        self.duration = Some(Box::new(duration.into_iter()));
         self
     }
 
-    pub fn amplitude<I: Iterator<Item = f64> + 'static>(mut self, amplitude: I) -> Self {
-        self.amplitude = Some(Box::new(amplitude));
+    pub fn amplitude<I: IntoIterator<Item = f64> + 'static>(mut self, amplitude: I) -> Self {
+        self.amplitude = Some(Box::new(amplitude.into_iter()));
         self
     }
 
-    pub fn frequency<I: Iterator<Item = f64> + 'static>(mut self, frequency: I) -> Self {
-        self.frequency = Some(Box::new(frequency));
+    pub fn frequency<I: IntoIterator<Item = f64> + 'static>(mut self, frequency: I) -> Self {
+        self.frequency = Some(Box::new(frequency.into_iter()));
         self
     }
 }

@@ -57,9 +57,9 @@ impl<T> Clone for CacheValue<T> {
 }
 
 impl<T> CacheValue<T> {
-    pub fn new(value: Value<T>) -> Self {
+    pub fn new(value: impl Into<Value<T>>) -> Self {
         CacheValue {
-            value: Rc::new(RefCell::new(value)),
+            value: Rc::new(RefCell::new(value.into())),
             state: Rc::new(RefCell::new(CacheValueState {
                 trigger: Duration::new(0, 0),
                 cached_value: None,
