@@ -130,7 +130,7 @@ fn main() {
 
     let scale1 = scale.clone();
     let density1 = density.clone();
-    let top_notes: Value<f64> = SimpleSequence::new(
+    let top_notes: Value<f64> = sequence_from_iterator(
         chords.clone().map(move |cs| cs.iter().map(|c| scale1[*c]).collect::<Vec<f64>>())
         .map(move |chord| {
             let (dur, notes) = outline_chord(&chord, arpeggio_duration, arpeggio_duration / 8, false, if *density1.borrow() > 0.0 {1.0} else {0.0});
@@ -147,7 +147,7 @@ fn main() {
     let scale1 = scale.clone();
     let density1 = density.clone();
     let (mut theme_dur, mut theme_notes) = outline_chord_structure(3, arpeggio_duration, arpeggio_duration / 8, false, *density1.borrow() - 0.1);
-    let structure: Value<f64> = SimpleSequence::new(
+    let structure: Value<f64> = sequence_from_iterator(
         chords.clone().map(move |cs| cs.iter().map(|c| scale1[*c] + 12.0).collect::<Vec<f64>>())
         .map(move |chord| {
             if rand::thread_rng().gen::<f64>() > 0.7 {
@@ -161,7 +161,7 @@ fn main() {
 
     let scale1 = scale.clone();
     let density1 = density.clone();
-    let pad: Value<f64> = SimpleSequence::new(
+    let pad: Value<f64> = sequence_from_iterator(
         chords.clone().map(move |cs| cs.iter().map(|c| scale1[*c] - 24.0).collect::<Vec<f64>>())
         .map(move |chord| {
             let note = Note {
@@ -174,7 +174,7 @@ fn main() {
 
     let scale1 = scale.clone();
     let density1 = density.clone();
-    let bass_line: Value<f64> = SimpleSequence::new(
+    let bass_line: Value<f64> = sequence_from_iterator(
         chords.clone().map(move |cs| cs.iter().map(|c| scale1[*c] - 36.0).collect::<Vec<f64>>())
         .map(move |chord| {
             let root = chord[0].frequency_from_midi();
@@ -187,7 +187,7 @@ fn main() {
                 };
                 notes.push((arpeggio_duration / 8, chirp(note)));
             }
-            (arpeggio_duration, SimpleSequence::new(notes).into())
+            (arpeggio_duration, sequence_from_iterator(notes).into())
         })).into();
 
     let mut sig = pad + bass_line + top_notes + structure;

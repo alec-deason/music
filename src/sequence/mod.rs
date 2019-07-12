@@ -101,29 +101,38 @@ impl<T: From<f64> + Add<Output=T>> ValueNode for RunningIteratorSequence<T> {
     }
 }
 
-pub struct SimpleSequence<T> {
-    iter: Box<dyn Iterator<Item = (Duration, Value<T>)>>,
+
+pub struct FancySequence<'a, S, T> {
+    state: S,
+    generator: Box<Fn(&mut S) -> Option<(Duration, Value<T>)> + 'a>,
 
     current_notes: VecDeque<Option<Value<T>>>,
     trigger: Duration,
 }
 
-impl<T> SimpleSequence<T> {
-    pub fn new<I: IntoIterator<Item = (Duration, Value<T>)> + 'static>(iter: I) -> Self {
+impl<'a, S, T> FancySequence<'a, S, T> {
+    pub fn new<F: Fn(&mut S) -> Option<(Duration, Value<T>)> + 'a>(initial_state: S, generator: F) -> Self {
         Self {
-            iter: Box::new(iter.into_iter()),
+            state: initial_state,
+            generator: Box::new(generator),
 
             current_notes: (0..3).map(|_| None).collect(),
             trigger: Duration::new(0, 0),
         }
     }
+
+
+}
+pub fn sequence_from_iterator<'a, T, I: IntoIterator<Item = (Duration, Value<T>)> + 'a>(iter: I) -> FancySequence<'a, Box<Iterator<Item = (Duration, Value<T>)> + 'a>, T> {
+    let iterator = Box::new(iter.into_iter());
+    FancySequence::new(iterator, |iterator| iterator.next())
 }
 
-impl<T: From<f64> + Add<Output=T>> ValueNode for SimpleSequence<T> {
+impl<'a, S, T: From<f64> + Add<Output=T>> ValueNode for FancySequence<'a, S, T> {
     type T = T;
     fn next(&mut self, env: &Env) -> Self::T {
         if env.time > self.trigger {
-            let note = self.iter.next();
+            let note = (self.generator)(&mut self.state);
             if note.is_some() {
                 let (duration, note) = note.unwrap();
                 self.trigger = env.time + duration;
