@@ -55,8 +55,8 @@ impl ADSR {
     }
 }
 
-impl From<ADSR> for Value<f64> {
-    fn from(adsr: ADSR) -> Value<f64> {
+impl<'a> From<ADSR> for Value<'a, f64> {
+    fn from(adsr: ADSR) -> Value<'a, f64> {
         RunningADSR {
             attack: adsr.attack.unwrap_or(0.1),
             sustain_level: adsr.sustain_level.unwrap_or(1.0),

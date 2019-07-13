@@ -7,12 +7,12 @@ macro_rules! value_binary_operator {
                 value::{ValueNode, Value},
                 Env,
             };
-            pub struct Operator<T> {
-                a: Value<T>,
-                b: Value<T>,
+            pub struct Operator<'a, T> {
+                a: Value<'a, T>,
+                b: Value<'a, T>,
             }
 
-            impl<T> ValueNode for Operator<T>
+            impl<'a, T> ValueNode for Operator<'a, T>
                 where T: $operator_name<Output = T> + 'static {
                     type T = T;
                     fn next(&mut self, env: &Env) -> T {
@@ -22,8 +22,8 @@ macro_rules! value_binary_operator {
                     }
             }
 
-            impl<T: $operator_name<Output = T> + 'static, D: Into<Value<T>>> $operator_name<D> for Value<T> {
-                type Output = Value<T>;
+            impl<'a, T: $operator_name<Output = T> + 'static, D: Into<Value<'a, T>>> $operator_name<D> for Value<'a, T> {
+                type Output = Value<'a, T>;
 
                 #[inline]
                 fn $operator_method(self, other: D) -> Self::Output {
@@ -35,11 +35,11 @@ macro_rules! value_binary_operator {
             }
 
             $(
-            impl $operator_name<Value<$numeric>> for $numeric {
-                type Output = Value<$numeric>;
+            impl<'a> $operator_name<Value<'a, $numeric>> for $numeric {
+                type Output = Value<'a, $numeric>;
 
                 #[inline]
-                fn $operator_method(self, other: Value<$numeric>) -> Self::Output {
+                fn $operator_method(self, other: Value<'a, $numeric>) -> Self::Output {
                     Operator {
                         a: self.into(),
                         b: other,
@@ -73,18 +73,18 @@ mod neg {
         value::{ValueNode, Value},
         Env,
     };
-    pub struct Operator<T> {
-        v: Value<T>,
+    pub struct Operator<'a, T> {
+        v: Value<'a, T>,
     }
-    impl<T: Neg<Output = T>> ValueNode for Operator<T> {
+    impl<'a, T: Neg<Output = T>> ValueNode for Operator<'a, T> {
             type T = T;
             fn next(&mut self, env: &Env) -> T {
                 -self.v.next(env)
             }
     }
-    impl<T: Neg<Output = T> + 'static> Neg for Value<T>
+    impl<'a, T: Neg<Output = T> + 'static> Neg for Value<'a, T>
         where T: Neg<Output = T> {
-        type Output = Value<T>;
+        type Output = Value<'a, T>;
 
         fn neg(self) -> Self::Output {
             Operator {
@@ -100,18 +100,18 @@ mod not {
         value::{ValueNode, Value},
         Env,
     };
-    pub struct Operator<T> {
-        v: Value<T>,
+    pub struct Operator<'a, T> {
+        v: Value<'a, T>,
     }
-    impl<T: Not<Output = T>> ValueNode for Operator<T> {
+    impl<'a, T: Not<Output = T>> ValueNode for Operator<'a, T> {
             type T = T;
             fn next(&mut self, env: &Env) -> T {
                 !self.v.next(env)
             }
     }
-    impl<T: Not<Output = T> + 'static> Not for Value<T>
+    impl<'a, T: Not<Output = T> + 'static> Not for Value<'a, T>
         where T: Not<Output = T> {
-        type Output = Operator<T>;
+        type Output = Operator<'a, T>;
 
         fn not(self) -> Self::Output {
             Operator {

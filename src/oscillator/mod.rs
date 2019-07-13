@@ -80,14 +80,14 @@ impl ValueNode for Sine {
     }
 }
 
-pub struct WaveTableSynth<T> {
-    frequency: Value<T>,
+pub struct WaveTableSynth<'a, T> {
+    frequency: Value<'a, T>,
     tables: Vec<(f64, Vec<f64>)>,
     position: f64,
 }
 
-impl<T> WaveTableSynth<T> {
-    pub fn sin(frequency: impl Into<Value<T>>) -> Self {
+impl<'a, T> WaveTableSynth<'a, T> {
+    pub fn sin(frequency: impl Into<Value<'a, T>>) -> Self {
         WaveTableSynth {
             frequency: frequency.into(),
             tables: SINE.to_vec(),
@@ -95,7 +95,7 @@ impl<T> WaveTableSynth<T> {
         }
     }
 
-    pub fn square(frequency: impl Into<Value<T>>) -> Self {
+    pub fn square(frequency: impl Into<Value<'a, T>>) -> Self {
         WaveTableSynth {
             frequency: frequency.into(),
             tables: SQUARE.to_vec(),
@@ -103,7 +103,7 @@ impl<T> WaveTableSynth<T> {
         }
     }
 
-    pub fn saw(frequency: impl Into<Value<T>>) -> Self {
+    pub fn saw(frequency: impl Into<Value<'a, T>>) -> Self {
         WaveTableSynth {
             frequency: frequency.into(),
             tables: SAW_BL.to_vec(),
@@ -112,7 +112,7 @@ impl<T> WaveTableSynth<T> {
     }
 }
 
-impl<T: Into<f64> + From<f64>> ValueNode for WaveTableSynth<T> {
+impl<'a, T: Into<f64> + From<f64>> ValueNode for WaveTableSynth<'a, T> {
     type T = T;
     fn next(&mut self, env: &Env) -> Self::T {
         let freq: f64 = self.frequency.next(env).into();
@@ -145,13 +145,13 @@ impl ValueNode for WhiteNoise {
     }
 }
 
-pub struct BrownianNoise<T> {
+pub struct BrownianNoise<'a, T> {
     current: f64,
-    wiggle: Value<T>,
+    wiggle: Value<'a, T>,
 }
 
-impl<T> BrownianNoise<T> {
-    pub fn new(wiggle: impl Into<Value<T>>) -> Self {
+impl<'a, T> BrownianNoise<'a, T> {
+    pub fn new(wiggle: impl Into<Value<'a, T>>) -> Self {
         Self {
             current: 0.0,
             wiggle: wiggle.into(),
@@ -159,7 +159,7 @@ impl<T> BrownianNoise<T> {
     }
 }
 
-impl<T: From<f64> + Into<f64>> ValueNode for BrownianNoise<T> {
+impl<'a, T: From<f64> + Into<f64>> ValueNode for BrownianNoise<'a, T> {
     type T = T;
     fn next(&mut self, env: &Env) -> Self::T {
         let wiggle:f64 = self.wiggle.next(env).into();

@@ -13,25 +13,25 @@ pub struct Note {
     pub frequency: f64,
 }
 
-pub struct IteratorSequence<T> {
-    instrument: Box<Fn(Note) -> Value<T>>,
-    duration: Option<Box<dyn Iterator<Item = Duration>>>,
-    amplitude: Option<Box<dyn Iterator<Item = f64>>>,
-    frequency: Option<Box<dyn Iterator<Item = f64>>>,
+pub struct IteratorSequence<'a, T> {
+    instrument: Box<Fn(Note) -> Value<'a, T> + 'a>,
+    duration: Option<Box<dyn Iterator<Item = Duration> + 'a>>,
+    amplitude: Option<Box<dyn Iterator<Item = f64> + 'a>>,
+    frequency: Option<Box<dyn Iterator<Item = f64> + 'a>>,
 }
 
-struct RunningIteratorSequence<T> {
-    instrument: Box<Fn(Note) -> Value<T>>,
-    duration: Box<dyn Iterator<Item = Duration>>,
-    amplitude: Box<dyn Iterator<Item = f64>>,
-    frequency: Box<dyn Iterator<Item = f64>>,
+struct RunningIteratorSequence<'a, T> {
+    instrument: Box<Fn(Note) -> Value<'a, T> + 'a>,
+    duration: Box<dyn Iterator<Item = Duration> + 'a>,
+    amplitude: Box<dyn Iterator<Item = f64> + 'a>,
+    frequency: Box<dyn Iterator<Item = f64> + 'a>,
 
-    current_notes: VecDeque<Option<Value<T>>>,
+    current_notes: VecDeque<Option<Value<'a, T>>>,
     trigger: Duration,
 }
 
-impl<T> IteratorSequence<T> {
-    pub fn new<F: Fn(Note) -> Value<T> + 'static>(instrument: F) -> Self {
+impl<'a, T> IteratorSequence<'a, T> {
+    pub fn new<F: Fn(Note) -> Value<'a, T> + 'a>(instrument: F) -> Self {
         Self {
             instrument: Box::new(instrument),
             duration: None,
@@ -40,24 +40,24 @@ impl<T> IteratorSequence<T> {
         }
     }
 
-    pub fn duration<I: IntoIterator<Item = Duration> + 'static>(mut self, duration: I) -> Self {
+    pub fn duration<I: IntoIterator<Item = Duration> + 'a>(mut self, duration: I) -> Self {
         self.duration = Some(Box::new(duration.into_iter()));
         self
     }
 
-    pub fn amplitude<I: IntoIterator<Item = f64> + 'static>(mut self, amplitude: I) -> Self {
+    pub fn amplitude<I: IntoIterator<Item = f64> + 'a>(mut self, amplitude: I) -> Self {
         self.amplitude = Some(Box::new(amplitude.into_iter()));
         self
     }
 
-    pub fn frequency<I: IntoIterator<Item = f64> + 'static>(mut self, frequency: I) -> Self {
+    pub fn frequency<I: IntoIterator<Item = f64> + 'a>(mut self, frequency: I) -> Self {
         self.frequency = Some(Box::new(frequency.into_iter()));
         self
     }
 }
 
-impl<T: From<f64> + Add<Output = T> + 'static> From<IteratorSequence<T>> for Value<T> {
-    fn from(iterator: IteratorSequence<T>) -> Value<T> {
+impl<'a, T: From<f64> + Add<Output = T> + 'a> From<IteratorSequence<'a, T>> for Value<'a, T> {
+    fn from(iterator: IteratorSequence<'a, T>) -> Value<'a, T> {
         let running = RunningIteratorSequence {
             instrument: iterator.instrument,
             duration: iterator.duration.unwrap_or_else(|| Box::new(iter::repeat(Duration::new(1, 0)))),
@@ -71,7 +71,7 @@ impl<T: From<f64> + Add<Output = T> + 'static> From<IteratorSequence<T>> for Val
     }
 }
 
-impl<T: From<f64> + Add<Output=T>> ValueNode for RunningIteratorSequence<T> {
+impl<'a, T: From<f64> + Add<Output=T>> ValueNode for RunningIteratorSequence<'a, T> {
     type T = T;
     fn next(&mut self, env: &Env) -> Self::T {
         if env.time > self.trigger {
@@ -104,14 +104,14 @@ impl<T: From<f64> + Add<Output=T>> ValueNode for RunningIteratorSequence<T> {
 
 pub struct FancySequence<'a, S, T> {
     state: S,
-    generator: Box<Fn(&mut S) -> Option<(Duration, Value<T>)> + 'a>,
+    generator: Box<Fn(&mut S) -> Option<(Duration, Value<'a, T>)> + 'a>,
 
-    current_notes: VecDeque<Option<Value<T>>>,
+    current_notes: VecDeque<Option<Value<'a, T>>>,
     trigger: Duration,
 }
 
 impl<'a, S, T> FancySequence<'a, S, T> {
-    pub fn new<F: Fn(&mut S) -> Option<(Duration, Value<T>)> + 'a>(initial_state: S, generator: F) -> Self {
+    pub fn new<F: Fn(&mut S) -> Option<(Duration, Value<'a, T>)> + 'a>(initial_state: S, generator: F) -> Self {
         Self {
             state: initial_state,
             generator: Box::new(generator),
@@ -123,7 +123,7 @@ impl<'a, S, T> FancySequence<'a, S, T> {
 
 
 }
-pub fn sequence_from_iterator<'a, T, I: IntoIterator<Item = (Duration, Value<T>)> + 'a>(iter: I) -> FancySequence<'a, Box<Iterator<Item = (Duration, Value<T>)> + 'a>, T> {
+pub fn sequence_from_iterator<'a, T, I: IntoIterator<Item = (Duration, Value<'a, T>)> + 'a>(iter: I) -> FancySequence<'a, Box<Iterator<Item = (Duration, Value<'a, T>)> + 'a>, T> {
     let iterator = Box::new(iter.into_iter());
     FancySequence::new(iterator, |iterator| iterator.next())
 }

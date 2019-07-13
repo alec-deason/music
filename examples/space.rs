@@ -121,7 +121,8 @@ fn main() {
         scale
     };
 
-    let chords = "I-ii-iii-IV-V-IV-iii-ii-I".split("-").map(|n| parse_roman_numeral_notation(n)).cycle();
+    //let chords = "I-ii-iii-IV-V-IV-iii-ii-I".split("-").map(|n| parse_roman_numeral_notation(n)).cycle();
+    let chords = "iii-VI-V-II-I".split("-").map(|n| parse_roman_numeral_notation(n)).cycle();
 
     let arpeggio_duration = Duration::from_millis(2500);
     let density = Rc::new(RefCell::new(-0.1f64));

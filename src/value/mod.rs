@@ -20,14 +20,14 @@ pub trait ValueNode {
     }
 }
 
-pub struct Value<T>(Box<ValueNode<T=T>>);
-impl<T, D: ValueNode<T=T> + 'static> From<D> for Value<T> {
+pub struct Value<'a, T>(Box<ValueNode<T=T> + 'a>);
+impl<'a, T, D: ValueNode<T=T> + 'a> From<D> for Value<'a, T> {
     fn from(node: D) -> Self {
         Value(Box::new(node))
     }
 }
 
-impl<T> Value<T> {
+impl<'a, T> Value<'a, T> {
     pub fn next(&mut self, env: &Env) -> T {
         self.0.next(env)
     }
@@ -41,12 +41,12 @@ struct CacheValueState<T> {
     cached_value: Option<T>,
 }
 
-pub struct CacheValue<T> {
-    value: Rc<RefCell<Value<T>>>,
+pub struct CacheValue<'a, T> {
+    value: Rc<RefCell<Value<'a, T>>>,
     state: Rc<RefCell<CacheValueState<T>>>
 }
 
-impl<T> Clone for CacheValue<T> {
+impl<'a, T> Clone for CacheValue<'a, T> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
@@ -55,8 +55,8 @@ impl<T> Clone for CacheValue<T> {
     }
 }
 
-impl<T> CacheValue<T> {
-    pub fn new(value: impl Into<Value<T>>) -> Self {
+impl<'a, T> CacheValue<'a, T> {
+    pub fn new(value: impl Into<Value<'a, T>>) -> Self {
         CacheValue {
             value: Rc::new(RefCell::new(value.into())),
             state: Rc::new(RefCell::new(CacheValueState {
@@ -68,7 +68,7 @@ impl<T> CacheValue<T> {
 }
 
 
-impl<T: Clone> ValueNode for CacheValue<T> {
+impl<'a, T: Clone> ValueNode for CacheValue<'a, T> {
     type T = T;
     fn next(&mut self, env: &Env) -> T {
         let mut state = self.state.borrow_mut();

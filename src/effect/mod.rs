@@ -8,14 +8,14 @@ use crate::{
     Env,
 };
 
-pub struct Delay<T> {
-    input: Value<T>,
+pub struct Delay<'a, T> {
+    input: Value<'a, T>,
     buffer: VecDeque<T>,
-    delay: Value<f64>,
+    delay: Value<'a, f64>,
 }
 
-impl<T: Into<f64>> Delay<T> {
-    pub fn new(input: impl Into<Value<T>>, delay: impl Into<Value<f64>>) -> Self {
+impl<'a, T: Into<f64>> Delay<'a, T> {
+    pub fn new(input: impl Into<Value<'a, T>>, delay: impl Into<Value<'a, f64>>) -> Self {
         Delay {
             input: input.into(),
             buffer: VecDeque::new(),
@@ -25,7 +25,7 @@ impl<T: Into<f64>> Delay<T> {
 }
 
 
-impl<T: From<f64>> ValueNode for Delay<T> {
+impl<'a, T: From<f64>> ValueNode for Delay<'a, T> {
     type T = T;
     fn next(&mut self, env: &Env) -> Self::T {
         let delay: f64 = self.delay.next(env).into();
@@ -38,12 +38,12 @@ impl<T: From<f64>> ValueNode for Delay<T> {
     }
 }
 
-pub struct Reverb {
-    output: Value<f64>,
+pub struct Reverb<'a> {
+    output: Value<'a, f64>,
 }
 
-impl Reverb {
-    pub fn new(input: impl Into<Value<f64>>, mix: f64, predelay: f64, lpf: f64, revtime: f64) -> Self {
+impl<'a> Reverb<'a> {
+    pub fn new(input: impl Into<Value<'a, f64>>, mix: f64, predelay: f64, lpf: f64, revtime: f64) -> Self {
         let dry = CacheValue::new(input);
         let mut temp: Value<f64> = Delay::new(dry.clone(), predelay).into();
         let mut wet: Value<f64> = 0.0.into();
@@ -68,21 +68,21 @@ impl Reverb {
 }
 
 
-impl ValueNode for Reverb {
+impl<'a> ValueNode for Reverb<'a> {
     type T = f64;
     fn next(&mut self, env: &Env) -> Self::T {
         self.output.next(env)
     }
 }
 
-pub struct RingModulator<T> {
-    input: Value<T>,
-    modulator: Value<T>,
-    mix: Value<T>,
+pub struct RingModulator<'a, T> {
+    input: Value<'a, T>,
+    modulator: Value<'a, T>,
+    mix: Value<'a, T>,
 }
 
-impl<T> RingModulator<T> {
-    pub fn new(input: impl Into<Value<T>>, modulator: impl Into<Value<T>>, mix: impl Into<Value<T>>) -> Self {
+impl<'a, T> RingModulator<'a, T> {
+    pub fn new(input: impl Into<Value<'a, T>>, modulator: impl Into<Value<'a, T>>, mix: impl Into<Value<'a, T>>) -> Self {
         Self {
             input: input.into(),
             modulator: modulator.into(),
@@ -92,7 +92,7 @@ impl<T> RingModulator<T> {
 }
 
 
-impl<T: Copy + Sub<Output=T> + Mul<Output=T> + Add<Output=T> + From<f64>> ValueNode for RingModulator<T> {
+impl<'a, T: Copy + Sub<Output=T> + Mul<Output=T> + Add<Output=T> + From<f64>> ValueNode for RingModulator<'a, T> {
     type T = T;
     fn next(&mut self, env: &Env) -> Self::T {
         let v = self.input.next(env);
