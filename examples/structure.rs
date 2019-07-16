@@ -222,7 +222,7 @@ fn main() {
     let target_len = env::args().into_iter().nth(1).unwrap_or("10".to_string()).parse::<usize>().unwrap();
     let target_beats = (target_len as f64 * 1000.0) / beat;
 
-    let scale = Scale::new(&MAJOR, 69);
+    let scale = Scale::major(69);
     let structure = harmonic_structure(&[(4.0, 0.9), (2.0, 0.1)], &scale, target_beats);
     let voice_1_melody = melody(&structure, 1.0, 0.6, 0.8);
     let voice_2_melody = melody(&structure, 1.0, 0.2, 0.7);

@@ -55,16 +55,50 @@ pub fn parse_roman_numeral_notation(src: &str) -> (usize, Vec<usize>) {
     (degree, semitones)
 }
 
+#[derive(Clone)]
 pub struct Scale {
-    pattern: Vec<u32>,
+    scale_type: Pattern,
     root: u32,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum Pattern {
+    Major,
+    Minor,
+}
+
 impl Scale {
-    pub fn new(pattern: &[u32], root: u32) -> Self {
+    pub fn new(scale_type: Pattern, root: u32) -> Self {
         Self {
-            pattern: pattern.iter().cloned().collect(),
+            scale_type,
             root,
+        }
+    }
+
+    pub fn major(root: u32) -> Self {
+        Self::new(Pattern::Major, root)
+    }
+
+    pub fn minor(root: u32) -> Self {
+        Self::new(Pattern::Minor, root)
+    }
+
+    fn pattern(&self) -> &[u32] {
+        match self.scale_type {
+            Pattern::Major => &MAJOR,
+            Pattern::Minor => &MINOR,
+        }
+    }
+
+    pub fn scale_type(&self) -> Pattern {
+        self.scale_type
+    }
+
+    pub fn triad(&self, degree: i32, pattern: Pattern) -> Vec<u32> {
+        let base = self.pitch(degree);
+        match pattern {
+            Pattern::Major => vec![base, base + 4, base + 7],
+            Pattern::Minor => vec![base, base + 3, base + 7],
         }
     }
 
@@ -79,14 +113,14 @@ impl Scale {
             octave += 1;
         }
         let mut current = self.root;
-        for (step_i, step) in self.pattern.iter().enumerate() {
+        for (step_i, step) in self.pattern().iter().enumerate() {
             if current == semitone {
                 return Some((octave, step_i as u32));
             }
             current += step;
         }
         if current == semitone {
-            Some((octave, self.pattern.len() as u32))
+            Some((octave, self.pattern().len() as u32))
         } else {
             None
         }
@@ -95,16 +129,16 @@ impl Scale {
     pub fn pitch(&self, mut degree: i32) -> u32 {
         let mut octave = 0;
         while degree < 0 {
-            degree += self.pattern.len() as i32;
+            degree += self.pattern().len() as i32;
             octave -= 1;
         }
-        while degree >= self.pattern.len() as i32 {
-            degree -= self.pattern.len() as i32;
+        while degree >= self.pattern().len() as i32 {
+            degree -= self.pattern().len() as i32;
             octave += 1;
         }
         let mut semitone = self.root as i32;
-        for i in 0..degree as usize {
-            semitone += self.pattern[i] as i32;
+        for step in self.pattern().iter().take(degree as usize) {
+            semitone += *step as i32;
         }
         (semitone + octave*12) as u32
     }
