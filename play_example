@@ -1,0 +1,3 @@
+#! /usr/bin/sh
+
+cargo run --release --example $1 600 | ffmpeg -f f32le -sample_rate 44100 -channels 2 -i - -f wav - | mpv -
