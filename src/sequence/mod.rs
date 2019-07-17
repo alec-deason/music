@@ -116,7 +116,7 @@ impl<'a, S, T> FancySequence<'a, S, T> {
             state: initial_state,
             generator: Box::new(generator),
 
-            current_notes: (0..3).map(|_| None).collect(),
+            current_notes: (0..5).map(|_| None).collect(),
             trigger: Duration::new(0, 0),
         }
     }

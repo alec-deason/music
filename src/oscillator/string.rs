@@ -11,6 +11,7 @@ use crate::{
 
 pub struct PluckedString {
     buffer: Vec<f64>,
+    smoothing: f64,
 
     amp: f64,
     previous: f64,
@@ -18,12 +19,13 @@ pub struct PluckedString {
 }
 
 impl PluckedString {
-    pub fn new(freq: f64) -> Self {
+    pub fn new(freq: f64, smoothing: f64) -> Self {
         let mut rng = rand::thread_rng();
         let buffer_length = 44100 / freq as usize;
         let amp = 1.0 + ((freq.min(1000.0) - 300.0).max(0.0) / 700.0) * 3.0;
         Self {
             buffer: (0..buffer_length).map(|_| *[1.0, -1.0].choose(&mut rng).unwrap()).collect(),
+            smoothing,
 
             amp,
             previous: 0.0,
@@ -36,7 +38,7 @@ impl PluckedString {
 impl ValueNode for PluckedString {
     type T = f64;
     fn next(&mut self, _env: &Env) -> Self::T {
-        let sample = 0.5 * (self.buffer[self.position] + self.previous);
+        let sample = self.smoothing * self.buffer[self.position] + (1.0 - self.smoothing) * self.previous;
         self.buffer[self.position] = sample;
         self.previous = sample;
         self.position = (self.position + 1) % self.buffer.len();

@@ -40,7 +40,7 @@ fn main() {
                         frequency: (tone ).frequency_from_midi() as f64,
                         amplitude: amp,
                     };
-            let mut pluck: Value<f64> = PluckedString::new(note.frequency).into();
+            let mut pluck: Value<f64> = PluckedString::new(note.frequency, 0.3).into();
             let env: Value<f64> = ADSR::new()
                 .attack(0.02)
                 .decay(0.02)

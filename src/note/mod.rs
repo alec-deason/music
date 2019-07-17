@@ -94,12 +94,12 @@ impl Scale {
         self.scale_type
     }
 
-    pub fn triad(&self, degree: i32, pattern: Pattern) -> Vec<u32> {
-        let base = self.pitch(degree);
-        match pattern {
-            Pattern::Major => vec![base, base + 4, base + 7],
-            Pattern::Minor => vec![base, base + 3, base + 7],
-        }
+    pub fn triad(&self, degree: i32) -> Vec<u32> {
+        vec![
+            self.pitch(degree),
+            self.pitch(degree+2),
+            self.pitch(degree+4),
+        ]
     }
 
     pub fn degree(&self, mut semitone: u32) -> Option<(i32, u32)> {
