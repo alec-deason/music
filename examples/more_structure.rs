@@ -32,7 +32,7 @@ mod plan {
     pub type ChordProgression = Vec<(Duration, Intensity, Chord)>;
     pub type SubPart = (Key, ChordProgression);
 
-    fn smooth_progression(key: &Key, leadin_chord: &Chord, count: u32) -> ChordProgression {
+    fn smooth_progression(key: &Key, leadin_chord: &Chord, count: u32, augmentation_prob: f64) -> ChordProgression {
         let mut rng = rand::thread_rng();
         let mut direction = *[-1, 1].choose(&mut rng).unwrap();
         let mut progression = vec![];
@@ -59,10 +59,17 @@ mod plan {
                 since_resolution = 0.0;
             } else {
                 current = current + direction * *[1, 1, 1, 2, 2].choose(&mut rng).unwrap();
-                if rng.gen::<f64>() > 0.8 {
+                if current < -7 || current > 14 || rng.gen::<f64>() > 0.8 {
                     direction *= -1;
                 }
-                progression.push((4.0, 1.0, key.triad(current)));
+                let mut chord = key.triad(current);
+                if rng.gen::<f64>() < augmentation_prob {
+                    let (octave, degree) = key.degree(chord[rng.gen_range(0, chord.len())]).unwrap();
+                    let degree = degree as i32 + *[-1, 1].choose(&mut rng).unwrap();
+                    chord.push((key.pitch(degree) as i32 + octave as i32*12) as u32);
+                    chord.sort();
+                }
+                progression.push((4.0, 1.0, chord));
                 since_resolution += 1.0;
             }
         }
@@ -71,15 +78,21 @@ mod plan {
 
     pub fn new() -> Parts {
         let mut rng = rand::thread_rng();
-        let mut parts = vec![];
+        let mut parts: Parts = vec![];
         let pattern = *[Pattern::Major, Pattern::Minor].choose(&mut rng).unwrap();
-        let root = 69 + 12 + rng.gen_range(-1, 1) * 12;
+        let root = 69 + rng.gen_range(0, 12);
         let key = Scale::new(pattern, root as u32);
         let mut last_end = key.triad(0);
-        for i in 0..10 {
-            let progression = smooth_progression(&key, &last_end, 12);
-            last_end = progression[progression.len()-1].2.clone();
-            parts.push((key.clone(), progression));
+        for _ in 0..10 {
+            if parts.len() > 0 && rng.gen::<f64>() < 0.6 {
+                let part = parts.choose(&mut rng).unwrap().clone();
+                last_end = part.1[part.1.len()-1].2.clone();
+                parts.push(part);
+            } else {
+                let progression = smooth_progression(&key, &last_end, 12, 0.7);
+                last_end = progression[progression.len()-1].2.clone();
+                parts.push((key.clone(), progression));
+            }
         }
         parts
     }
@@ -155,19 +168,22 @@ mod voicing {
     fn random_fill_melody(parts: &plan::Parts, octave: i32, density: f64) -> Vec<(f64, Option<Vec<(u32, f64)>>)> {
         let mut rng = rand::thread_rng();
 
-        let passing_note_prob = 0.4;
-        let keep_direction_prob = 0.8;
+        let passing_note_prob = 0.5;
+        let break_direction_prob = 0.6;
         let switch_direction_prob = 0.4;
-        let repeat_measure_prob = 0.5;
-        let repeat_distance_set = vec![1, 2, 3, 4];
+        let repeat_measure_prob = 0.7;
+        let repeat_distance_set = vec![1, 2, 3];
+        let double_prob = 0.6;
 
+        let mut doubled = false;
         let mut direction: i32 = *[-1, 1].choose(&mut rng).unwrap();
         let mut last_chord_position = 0;
         let subdivision = 1.0;
         let mut beat_clock = 0.0;
         let mut all_notes: Vec<Vec<(f64, Option<Vec<(Tone, f64)>>)>> = vec![];
-        for (key, progression) in parts {
-            for (dur, inten, chord) in progression {
+        let mut local_subdivision = subdivision;
+        for (_key, progression) in parts {
+            for (dur, _inten, chord) in progression {
                 if all_notes.len() > 0 && rng.gen::<f64>() < repeat_measure_prob {
                     let idx = *repeat_distance_set.choose(&mut rng).unwrap();
                     let idx = (all_notes.len() as i32 - idx).max(0);
@@ -177,22 +193,29 @@ mod voicing {
                 let mut notes = vec![];
                 let mut beats_remaining = *dur * subdivision;
                 while beats_remaining > 0.0 {
+                    if doubled && rng.gen::<f64>() < 1.0 - double_prob {
+                        doubled = false;
+                        local_subdivision = subdivision;
+                    } else if rng.gen::<f64>() < double_prob {
+                        doubled = true;
+                        local_subdivision = subdivision / 2.0;
+                    }
                     if rng.gen::<f64>() < switch_direction_prob {
                         direction *= -1;
                     }
                     if rng.gen::<f64>() < density {
-                        if beats_remaining < 3.0/subdivision || rng.gen::<f64>() > passing_note_prob {
+                        if beats_remaining < 3.0/local_subdivision || rng.gen::<f64>() > passing_note_prob {
                             let (accented, amp) = accent(beat_clock as u32);
-                            let tone = if rng.gen::<f64>() < keep_direction_prob {
+                            let tone = if rng.gen::<f64>() < break_direction_prob {
                                 last_chord_position = (last_chord_position + direction).min(chord.len() as i32 -1).max(0);
                                 Tone::ChordTone(last_chord_position as usize)
                             } else {
                                 last_chord_position = rng.gen_range(0, chord.len() as i32);
                                 Tone::ChordTone(last_chord_position as usize)
                             };
-                            notes.push((1.0 / subdivision, Some(vec![(tone, amp)])));
-                            beat_clock += 1.0/subdivision;
-                            beats_remaining -= 1.0/subdivision;
+                            notes.push((1.0 / local_subdivision, Some(vec![(tone, amp)])));
+                            beat_clock += 1.0/local_subdivision;
+                            beats_remaining -= 1.0/local_subdivision;
                         } else  {
                             //Passing tone
                             let direction = *[-1, 1].choose(&mut rng).unwrap();
@@ -202,25 +225,25 @@ mod voicing {
                                 rng.gen_range(1, chord.len() as i32)
                             };
                             let (accented, amp) = accent(beat_clock as u32);
-                            notes.push((1.0 / subdivision, Some(vec![(Tone::ChordTone(tone as usize), amp)])));
-                            beat_clock += 1.0/subdivision;
-                            beats_remaining -= 1.0/subdivision;
+                            notes.push((1.0 / local_subdivision, Some(vec![(Tone::ChordTone(tone as usize), amp)])));
+                            beat_clock += 1.0/local_subdivision;
+                            beats_remaining -= 1.0/local_subdivision;
 
                             let (accented, amp) = accent(beat_clock as u32);
-                            notes.push((1.0 / subdivision, Some(vec![(Tone::StepFromChordTone(tone as usize, direction), amp)])));
-                            beat_clock += 1.0/subdivision;
-                            beats_remaining -= 1.0/subdivision;
+                            notes.push((1.0 / local_subdivision, Some(vec![(Tone::StepFromChordTone(tone as usize, direction), amp)])));
+                            beat_clock += 1.0/local_subdivision;
+                            beats_remaining -= 1.0/local_subdivision;
 
                             let (accented, amp) = accent(beat_clock as u32);
-                            notes.push((1.0 / subdivision, Some(vec![(Tone::AdjacentChordTone(tone as usize, direction), amp)])));
-                            beat_clock += 1.0/subdivision;
-                            beats_remaining -= 1.0/subdivision;
+                            notes.push((1.0 / local_subdivision, Some(vec![(Tone::AdjacentChordTone(tone as usize, direction), amp)])));
+                            beat_clock += 1.0/local_subdivision;
+                            beats_remaining -= 1.0/local_subdivision;
 
                         }
                     } else {
-                        notes.push((1.0 / subdivision, None));
-                        beat_clock += 1.0/subdivision;
-                        beats_remaining -= 1.0/subdivision;
+                        notes.push((1.0 / local_subdivision, None));
+                        beat_clock += 1.0/local_subdivision;
+                        beats_remaining -= 1.0/local_subdivision;
                     }
                 }
                 all_notes.push(notes);
@@ -333,14 +356,21 @@ fn chirp<'a>(note: Note, buzzyness: f64) -> Value<'a, f64> {
 }
              
 fn pad<'a>(note: Note) -> Value<'a, f64> {
-    let mut rng = rand::thread_rng();
-    let pluck: Value<f64> = DrivenString::new(note.frequency.into()).into();
-    let env: Value<f64> = ADSR::new()
-        .attack(0.4)
-        .duration(note.duration.as_secs_f64() - 0.4)
-        .release(1.5).into();
+    let chirp_amount = 1.5;
+    let freq1: Value<f64> = note.frequency.into();
+    let freq2: Value<f64> = (note.frequency.midi_from_frequency() + 0.05).frequency_from_midi().into();
+    let freq3: Value<f64> = (note.frequency/2.0).into();
+    let osc1: Value<f64> = WaveTableSynth::saw(freq1 * chirp_amount).into();
+    let osc2: Value<f64> = WaveTableSynth::saw(freq2 * chirp_amount).into();
+    let osc3: Value<f64> = WaveTableSynth::sin(freq3 * chirp_amount).into();
 
-    pluck * env * note.amplitude
+    let amps = vec![1.0, 1.0, 2.0];
+    let amp_sum: f64 = amps.iter().sum();
+    let mut sig = (osc1*amps[0] + osc2*amps[1] + osc3*amps[2]) / amp_sum;
+    sig = RLPF::new(sig, 1800.0, 0.5).into();
+
+    let env: Value<f64> = ADSR::new().attack(0.4).sustain(1.0).duration(note.duration.as_secs_f64() - 0.4).release(0.3).curve(1.0).into();
+    sig * env * note.amplitude
 }
 
 pub fn main() {
@@ -356,7 +386,7 @@ pub fn main() {
         voicing::Voice::Melody(-1, 0.6),
     ]);
 
-    let bpm = 180.0;
+    let bpm = rng.gen_range(130.0, 195.0);
     let beat = 60000.0/bpm;
     let target_len = env::args().into_iter().nth(1).unwrap_or("10".to_string()).parse::<usize>().unwrap();
 
@@ -439,7 +469,7 @@ pub fn main() {
             }
         })).into();
 
-    let mut sig = ((melody_voice + melody_voice2 * 0.0) * 0.8 + (bass * 1.0 + pads * 1.0) * 0.0) * 1.0;
+    let mut sig = ((melody_voice + melody_voice2 * 1.0) * 0.8 + (bass * 1.0 + pads * 0.0) * 0.5) * 1.0;
     sig = Reverb::new(sig, 0.8, 0.1, 1000.0, 4.8).into();
     
     let mut env = Env::new(44100);
