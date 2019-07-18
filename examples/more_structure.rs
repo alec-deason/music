@@ -87,8 +87,9 @@ mod plan {
     pub fn new(rng: &mut impl Rng) -> Parts {
         let mut parts: Parts = vec![];
         let pattern = *[Pattern::Major, Pattern::Minor].choose(rng).unwrap();
-        let root = 69 - 12 + rng.gen_range(0, 12);
+        let root = 69 + rng.gen_range(-12, 12);
         let key = Scale::new(pattern, root as u32);
+        let augmentation_prob = rng.gen_range(0.0, 0.9);
         let mut last_end = key.triad(0);
         for _ in 0..10 {
             if parts.len() > 0 && rng.gen::<f64>() < 0.6 {
@@ -97,7 +98,7 @@ mod plan {
                 parts.push(part);
             } else {
                 let density = if rng.gen::<f64>() > 0.5 { 1.0 } else { 2.0 };
-                let progression = smooth_progression(&key, &last_end, 8, 0.9, density, rng);
+                let progression = smooth_progression(&key, &last_end, 8, augmentation_prob, density, rng);
                 last_end = progression[progression.len()-1].3.clone();
                 parts.push((key.clone(), progression));
             }
@@ -118,11 +119,11 @@ mod voicing {
     #[derive(Copy, Clone, Debug)]
     pub enum HarmonyType {
         Chord,
-        ArpeggiatedChord,
+        ArpeggiatedChord(u32),
         RepeatedRoot,
     }
 
-    fn fill_harmony(parts: &plan::Parts, t: HarmonyType, octave: i32, _rng: &mut impl Rng) -> Vec<(f64, Option<Vec<(u32, f64)>>)> {
+    fn fill_harmony(parts: &plan::Parts, t: HarmonyType, octave: i32, rng: &mut impl Rng) -> Vec<(f64, Option<Vec<(u32, f64)>>)> {
         let mut notes = vec![];
         let mut beat_clock = 0.0;
         for (key, progression) in parts {
@@ -135,8 +136,15 @@ mod voicing {
                         )));
                         beat_clock += dur;
                     },
-                    HarmonyType::ArpeggiatedChord => {
+                    HarmonyType::ArpeggiatedChord(direction) => {
                         for i in 0..*dur as usize {
+                            let i = if direction == 0 {
+                                i
+                            } else if direction == 1 {
+                                *dur as usize - i
+                            } else {
+                                rng.gen_range(0, *dur as usize)
+                            };
                             let (accented, amp) = accent(beat_clock as u32);
                             notes.push((1.0, Some(vec![((chord[i % chord.len()] as i32 + octave*12) as u32, amp)])));
                             beat_clock += 1.0;
@@ -177,7 +185,7 @@ mod voicing {
         let passing_note_prob = rng.gen_range(0.0, 0.8);
         let break_direction_prob = rng.gen_range(0.1, 0.6);
         let switch_direction_prob = rng.gen_range(0.1, 0.6);
-        let repeat_measure_prob = rng.gen_range(0.3, 0.8);
+        let repeat_measure_prob = rng.gen_range(0.4, 0.8);
         let repeat_distance_set = vec![1, 2, 3];
         let double_prob = rng.gen_range(0.2, 0.8);
 
@@ -350,17 +358,33 @@ fn pad<'a>(note: Note) -> Value<'a, f64> {
     sig * env * note.amplitude
 }
 
+fn chorus<'a>(note: Note) -> Value<'a, f64> {
+    let mut rng = rand::thread_rng();
+    let detune = 0.015;
+    let count = 5;
+
+    let mut sig: Value<f64> = WaveTableSynth::sin(note.frequency).into();
+    for _ in 0..count {
+        sig = sig + WaveTableSynth::saw(note.frequency * rng.gen_range(1.0 - detune, 1.0 + detune));
+    }
+    let mut cutoff: Value<f64> = WaveTableSynth::sin(5.0).into();
+    cutoff = 1500.0 + ((cutoff + 1.0) / 2.0) * 500.0;
+    sig = RLPF::new(sig, cutoff, 0.5).into();
+    let env: Value<f64> = ADSR::new().attack(0.1).sustain(1.0).duration(note.duration.as_secs_f64() - 0.1).release(0.1).curve(1.0).into();
+    (sig / count as f64) * env * note.amplitude
+}
+
 pub fn main() {
     let seed = env::args().into_iter().nth(2).unwrap_or("42".to_string()).parse::<u64>().unwrap();
     let mut rng = ChaChaRng::seed_from_u64(seed);
     let voices = voicing::new(&plan::new(&mut rng), &[
         voicing::Voice::Melody(0, 0.9),
         if rng.gen::<f64>() > 0.5 {
-            voicing::Voice::Harmony(voicing::HarmonyType::ArpeggiatedChord, -2)
+            voicing::Voice::Harmony(voicing::HarmonyType::ArpeggiatedChord(rng.gen_range(0, 3)), -2)
         } else {
             voicing::Voice::Harmony(voicing::HarmonyType::RepeatedRoot, -2)
         },
-        voicing::Voice::Harmony(voicing::HarmonyType::Chord, -1),
+        voicing::Voice::Harmony(voicing::HarmonyType::Chord, rng.gen_range(-1, 1)),
     ], &mut rng);
 
     let bpm = rng.gen_range(130.0, 195.0);
@@ -369,7 +393,7 @@ pub fn main() {
 
     let swing = 0.0;
     let mut beat_clock = 0.0;
-    let melody_string = rng.gen::<f64>() > 0.5;
+    let melody_string = rng.gen_range(0, 3);
     let buzzyness = rng.gen_range(0.05, 2.0);
     let melody_voice: Value<f64> = sequence_from_iterator(
         (&voices[0]).into_iter()
@@ -388,11 +412,13 @@ pub fn main() {
                         frequency: (tone ).frequency_from_midi() as f64,
                         amplitude: *amp,
                     };
-                    if melody_string {
-                        let mut pluck: Value<f64> = PluckedString::new(note.frequency, 0.6).into();
+                    if melody_string == 0 {
+                        let mut pluck: Value<f64> = PluckedString::new(note.frequency / 2.0, 0.6).into();
                         pluck = RLPF::new(pluck, 2000.0, 0.15).into();
                         sig = sig + pluck;
-                    } else {
+                    } else if melody_string == 1 {
+                        sig = sig + chorus(note);
+                    } else if melody_string == 2 {
                         sig = sig + chirp(note, buzzyness);
                     }
                 }
@@ -404,7 +430,7 @@ pub fn main() {
 
     let mut beat_clock = 0.0;
     let buzzyness = rng.gen_range(0.05, 2.0);
-    let bass_string = rng.gen::<f64>() > 0.5;
+    let bass_string = rng.gen_range(0, 3);
     let bass: Value<f64> = sequence_from_iterator(
         (&voices[1]).into_iter()
         .map(move |(num_beats, note)| { 
@@ -422,12 +448,14 @@ pub fn main() {
                         frequency: (tone ).frequency_from_midi() as f64,
                         amplitude: *amp,
                     };
-                    if bass_string {
+                    if bass_string == 0 {
                         let mut pluck: Value<f64> = PluckedString::new(note.frequency, 0.15).into();
                         pluck = RLPF::new(pluck, 2000.0, 0.25).into();
                         sig = sig + pluck;
-                    } else {
+                    } else if bass_string == 1 {
                         sig = sig + chirp(note, buzzyness);
+                    } else if bass_string == 2 {
+                        sig = sig + chorus(note);
                     }
                 }
                 (Duration::from_millis((num_beats * beat) as u64), sig)
@@ -455,10 +483,10 @@ pub fn main() {
             }
         })).into();
 
-    let pad_mix = rng.gen_range(0.0, 0.5);
-    let mut sig = ((melody_voice ) * 1.0 + (bass * 1.5 + pads * pad_mix) * 0.5) * 0.5;
+    let pad_mix = rng.gen_range(0.0, 0.8);
+    let mut sig = ((melody_voice ) * 1.0 + (bass * 1.0 + pads * pad_mix) * 0.4) * 1.0;
 
-    sig = Reverb::new(sig, rng.gen_range(0.3, 0.9), 0.1, 1000.0, 3.8).into();
+    sig = Reverb::new(sig, 0.8, 0.1, 1000.0, 3.8).into();
 
     //sig = old_timeify(sig, 1.5);
 
