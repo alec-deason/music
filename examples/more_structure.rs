@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::env;
 use rand::Rng;
-use rand::seq::{SliceRandom,};
+use rand::{seq::SliceRandom, SeedableRng};
+use rand_chacha::ChaChaRng;
 use byteorder::{WriteBytesExt, LittleEndian};
 use std::io::{self};
 
@@ -33,9 +34,7 @@ mod plan {
     pub type ChordProgression = Vec<(Duration, Intensity, Chord)>;
     pub type SubPart = (Key, ChordProgression);
 
-    fn smooth_progression(key: &Key, leadin_chord: &Chord, count: u32, augmentation_prob: f64) -> ChordProgression {
-        let mut rng = rand::thread_rng();
-
+    fn smooth_progression(key: &Key, leadin_chord: &Chord, count: u32, augmentation_prob: f64, rng: &mut impl Rng) -> ChordProgression {
         let chord_map: Vec<(i32, Vec<usize>)> = vec![
             (2, vec![1, 5]),
             (3, vec![2, 6]),
@@ -49,7 +48,7 @@ mod plan {
 
         let change_direction_prob = 0.4;
 
-        let mut direction = *[-1, 1].choose(&mut rng).unwrap();
+        let mut direction = *[-1, 1].choose(rng).unwrap();
         let mut progression = vec![];
         let (_co, current) = key.degree(leadin_chord[0]).unwrap();
         let mut state = chord_map.iter().enumerate().filter(|(_, s)| s.0 == current as i32).nth(0).unwrap_or((4, &(6, vec![2, 7]))).0;
@@ -64,12 +63,12 @@ mod plan {
             }
             let next_states: Vec<_> = next_states.iter().enumerate().collect();
 
-            state = *next_states.choose_weighted(&mut rng, |(i, _)| *i+1).unwrap().1;
+            state = *next_states.choose_weighted(rng, |(i, _)| *i+1).unwrap().1;
 
             let mut chord = key.triad(chord_map[state].0);
             if rng.gen::<f64>() < augmentation_prob {
                 let (octave, degree) = key.degree(chord[rng.gen_range(0, chord.len())]).unwrap();
-                let degree = degree as i32 + *[-1, 1].choose(&mut rng).unwrap();
+                let degree = degree as i32 + *[-1, 1].choose(rng).unwrap();
                 chord.push((key.pitch(degree) as i32 + octave as i32*12) as u32);
                 chord.sort();
             }
@@ -78,20 +77,19 @@ mod plan {
         progression
     }
 
-    pub fn new() -> Parts {
-        let mut rng = rand::thread_rng();
+    pub fn new(rng: &mut impl Rng) -> Parts {
         let mut parts: Parts = vec![];
-        let pattern = *[Pattern::Major, Pattern::Minor].choose(&mut rng).unwrap();
+        let pattern = *[Pattern::Major, Pattern::Minor].choose(rng).unwrap();
         let root = 69 - 12 + rng.gen_range(0, 12);
         let key = Scale::new(pattern, root as u32);
         let mut last_end = key.triad(0);
         for _ in 0..10 {
             if parts.len() > 0 && rng.gen::<f64>() < 0.6 {
-                let part = parts.choose(&mut rng).unwrap().clone();
+                let part = parts.choose(rng).unwrap().clone();
                 last_end = part.1[part.1.len()-1].2.clone();
                 parts.push(part);
             } else {
-                let progression = smooth_progression(&key, &last_end, 12, 0.5);
+                let progression = smooth_progression(&key, &last_end, 12, 0.5, rng);
                 last_end = progression[progression.len()-1].2.clone();
                 parts.push((key.clone(), progression));
             }
@@ -116,7 +114,7 @@ mod voicing {
         RepeatedRoot,
     }
 
-    fn fill_harmony(parts: &plan::Parts, t: HarmonyType, octave: i32) -> Vec<(f64, Option<Vec<(u32, f64)>>)> {
+    fn fill_harmony(parts: &plan::Parts, t: HarmonyType, octave: i32, _rng: &mut impl Rng) -> Vec<(f64, Option<Vec<(u32, f64)>>)> {
         let mut notes = vec![];
         let mut beat_clock = 0.0;
         for (key, progression) in parts {
@@ -167,9 +165,7 @@ mod voicing {
         AdjacentChordTone(usize, i32),
     }
 
-    fn random_fill_melody(parts: &plan::Parts, octave: i32, density: f64) -> Vec<(f64, Option<Vec<(u32, f64)>>)> {
-        let mut rng = rand::thread_rng();
-
+    fn random_fill_melody(parts: &plan::Parts, octave: i32, density: f64, rng: &mut impl Rng) -> Vec<(f64, Option<Vec<(u32, f64)>>)> {
         let passing_note_prob = 0.5;
         let break_direction_prob = 0.3;
         let switch_direction_prob = 0.4;
@@ -178,7 +174,7 @@ mod voicing {
         let double_prob = 0.6;
 
         let mut doubled = false;
-        let mut direction: i32 = *[-1, 1].choose(&mut rng).unwrap();
+        let mut direction: i32 = *[-1, 1].choose(rng).unwrap();
         let mut last_chord_position = 0;
         let subdivision = 1.0;
         let mut beat_clock = 0.0;
@@ -187,7 +183,7 @@ mod voicing {
         for (_key, progression) in parts {
             for (dur, _inten, chord) in progression {
                 if all_notes.len() > 0 && rng.gen::<f64>() < repeat_measure_prob {
-                    let idx = *repeat_distance_set.choose(&mut rng).unwrap();
+                    let idx = *repeat_distance_set.choose(rng).unwrap();
                     let idx = (all_notes.len() as i32 - idx).max(0);
                     all_notes.push(all_notes[idx as usize].clone());
                     continue
@@ -220,7 +216,7 @@ mod voicing {
                             beats_remaining -= 1.0/local_subdivision;
                         } else  {
                             //Passing tone
-                            let direction = *[-1, 1].choose(&mut rng).unwrap();
+                            let direction = *[-1, 1].choose(rng).unwrap();
                             let mut tone = if direction > 0 {
                                 rng.gen_range(0, chord.len() as i32 -1)
                             } else {
@@ -293,44 +289,15 @@ mod voicing {
         final_tones
     }
 
-    fn new_idea() {
-    }
-    fn structured_fill_melody(parts: &plan::Parts, octave: i32) -> Vec<(f64, Option<Vec<(u32, f64)>>)> {
-        let mut rng = rand::thread_rng();
-        let ideas: Vec<_> = (0..rng.gen_range(1, 3)).map(|_| (0..rng.gen_range(3, 6)).map(|_| (rng.gen_range(1, 8) as f64 / 4.0, rng.gen_range(-4, 4))).collect::<Vec<(f64, i32)>>()).collect();
-        let mut current_idea = rng.gen_range(0, ideas.len());
-        let mut idea_idx = 0;
-        let mut last_note = parts[0].1[0].2[0];
-        let mut notes = vec![];
-        for (key, progression) in parts {
-            for (dur, inten, chord) in progression {
-                for _ in 0..*dur as u32 {
-                    if idea_idx == ideas[current_idea].len() {
-                        if rng.gen::<f64>() > 0.8 {
-                            current_idea = rng.gen_range(0, ideas.len());
-                        }
-                        idea_idx = 0;
-                        last_note = (*chord.choose(&mut rng).unwrap() as i32 + octave*12) as u32;
-                        notes.push((1.0, Some(vec![(last_note, 1.0)])));
-                    } else {
-                        notes.push((1.0, Some(vec![((last_note as i32 + ideas[current_idea][idea_idx].1) as u32, 1.0)])));
-                    }
-                    idea_idx += 1;
-                }
-            }
-        }
-        notes
-    }
-
     pub type Voicing = Vec<Vec<(f64, Option<Vec<(u32, f64)>>)>>;
 
-    pub fn new(parts: &plan::Parts, voice_plan: &[Voice]) -> Voicing {
+    pub fn new(parts: &plan::Parts, voice_plan: &[Voice], rng: &mut impl Rng) -> Voicing {
         let mut voices = vec![];
 
         for vp in voice_plan {
             voices.push(match vp {
-                Voice::Harmony(t, o) => fill_harmony(parts, *t, *o),
-                Voice::Melody(o, d) => random_fill_melody(parts, *o, *d),
+                Voice::Harmony(t, o) => fill_harmony(parts, *t, *o, rng),
+                Voice::Melody(o, d) => random_fill_melody(parts, *o, *d, rng),
             });
         }
 
@@ -376,8 +343,9 @@ fn pad<'a>(note: Note) -> Value<'a, f64> {
 }
 
 pub fn main() {
-    let mut rng = rand::thread_rng();
-    let voices = voicing::new(&plan::new(), &[
+    let seed = env::args().into_iter().nth(2).unwrap_or("42".to_string()).parse::<u64>().unwrap();
+    let mut rng = ChaChaRng::seed_from_u64(seed);
+    let voices = voicing::new(&plan::new(&mut rng), &[
         voicing::Voice::Melody(0, 0.9),
         if rng.gen::<f64>() > 0.5 {
             voicing::Voice::Harmony(voicing::HarmonyType::ArpeggiatedChord, -2)
@@ -386,19 +354,25 @@ pub fn main() {
         },
         voicing::Voice::Harmony(voicing::HarmonyType::Chord, -1),
         voicing::Voice::Melody(-1, 0.7),
-    ]);
+    ], &mut rng);
 
     let bpm = rng.gen_range(130.0, 195.0);
     let beat = 60000.0/bpm;
     let target_len = env::args().into_iter().nth(1).unwrap_or("10".to_string()).parse::<usize>().unwrap();
 
-    eprintln!("{} {}", voices[0].iter().map(|(d, _)| d).sum::<f64>(), voices[1].iter().map(|(d, _)| d).sum::<f64>());
-    let buzzyness = rng.gen_range(0.05, 2.0);
+    let swing = 0.0;
+    let mut beat_clock = 0.0;
     let melody_voice: Value<f64> = sequence_from_iterator(
         (&voices[0]).into_iter()
         .map(move |(num_beats, note)| { 
             if let Some(notes) = note {
                 let mut sig: Value<f64> = 0.0.into();
+                let beat = if beat_clock % 0.5 == 0.0 {
+                    beat * (1.0+swing)
+                } else {
+                    beat * swing
+                };
+                beat_clock += num_beats;
                 for (tone, amp) in notes {
                     let note = Note {
                         duration: Duration::from_millis((num_beats * beat) as u64),
@@ -434,12 +408,19 @@ pub fn main() {
             }
         })).into();
 
+    let mut beat_clock = 0.0;
     let buzzyness = rng.gen_range(0.05, 2.0);
     let bass: Value<f64> = sequence_from_iterator(
         (&voices[1]).into_iter()
         .map(move |(num_beats, note)| { 
             if let Some(notes) = note {
                 let mut sig: Value<f64> = 0.0.into();
+                let beat = if beat_clock % 0.5 == 0.0 {
+                    beat * (1.0+swing)
+                } else {
+                    beat * swing
+                };
+                beat_clock += num_beats;
                 for (tone, amp) in notes {
                     let note = Note {
                         duration: Duration::from_millis((num_beats * beat) as u64),

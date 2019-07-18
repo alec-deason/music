@@ -18,3 +18,4 @@ itertools = "0.8"
 
 [dev-dependencies]
 byteorder = "1"
+rand_chacha = "0.1.1"
