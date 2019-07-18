@@ -95,10 +95,11 @@ impl<'a, T: From<f64>> AllPass<'a, T> {
     }
 }
 
-impl<'a, T: Add<Output = T> + Mul<Output = T> + Neg<Output = T> + From<f64> + Copy> ValueNode for AllPass<'a, T> {
+impl<'a, T: Add<Output = T> + Mul<Output = T> + Neg<Output = T> + Into<f64> + From<f64> + Copy> ValueNode for AllPass<'a, T> {
     type T = T;
     fn next(&mut self, env: &Env) -> Self::T {
         let x = self.input.next(env);
+        if x.into().abs() > 100.0 { eprintln!("{}", x.into()); }
         let s_d = self.buff.pop_front().unwrap_or_else(|| 0.0.into());
         let s:T = x + self.k * s_d;
         let y:T = -self.k * self.buff[0] + s_d;
@@ -179,19 +180,19 @@ impl<'a> TrapezoidSVF<'a> {
     }
 
     pub fn high(input: impl Into<Value<'a, f64>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
-        Self::new(FilterType::Band, input, frequency, q)
+        Self::new(FilterType::High, input, frequency, q)
     }
 
     pub fn notch(input: impl Into<Value<'a, f64>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
-        Self::new(FilterType::Band, input, frequency, q)
+        Self::new(FilterType::Notch, input, frequency, q)
     }
 
     pub fn peak(input: impl Into<Value<'a, f64>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
-        Self::new(FilterType::Band, input, frequency, q)
+        Self::new(FilterType::Peak, input, frequency, q)
     }
 
     pub fn all(input: impl Into<Value<'a, f64>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
-        Self::new(FilterType::Band, input, frequency, q)
+        Self::new(FilterType::All, input, frequency, q)
     }
 }
 

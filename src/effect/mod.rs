@@ -124,13 +124,13 @@ impl<'a, T: Into<f64> + From<f64>> ValueNode for SoftClip<'a, T> {
     }
 }
 
-pub fn old_timeify<'a>(sig: impl Into<Value<'a, f64>>) -> Value<'a, f64> {
+pub fn old_timeify<'a>(sig: impl Into<Value<'a, f64>>, overdrive: f64) -> Value<'a, f64> {
     let mut sig: Value<f64> = sig.into();
     sig = TrapezoidSVF::low_pass(sig, 800.0, 0.8).into();
-    sig = TrapezoidSVF::high(sig, 400.0, 0.8).into();
+    sig = TrapezoidSVF::high(sig, 100.0, 0.8).into();
     let impulses: Value<f64> = BrownianNoise::new(0.8, 0.5).into();
     let low_crackle: Value<f64> = BrownianNoise::new(20.0, 0.1).into();
     let low_crackle2: Value<f64> = BrownianNoise::new(30.0, 0.1).into();
-    sig = SoftClip::new(sig * 2.0).into();
+    sig = SoftClip::new(sig * overdrive).into();
     sig * 1.0 + (impulses * 0.6 + low_crackle * 0.5 + low_crackle2 * 0.5) * 0.6
 }
