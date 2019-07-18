@@ -138,6 +138,29 @@ impl<'a, T: Into<f64> + From<f64>> ValueNode for WaveTableSynth<'a, T> {
 
 
 #[derive(Copy, Clone, Debug)]
+pub struct Impulses {
+    freq: f64,
+}
+
+impl Impulses {
+    pub fn new(freq: f64) -> Self {
+        Self {
+            freq,
+        }
+    }
+}
+impl ValueNode for Impulses {
+    type T = f64;
+    fn next(&mut self, env: &Env) -> Self::T {
+        if rand::thread_rng().gen::<f64>() < self.freq / env.sample_rate as f64 {
+            1.0
+        } else {
+            0.0
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct WhiteNoise;
 
 impl ValueNode for WhiteNoise {
@@ -150,13 +173,15 @@ impl ValueNode for WhiteNoise {
 pub struct BrownianNoise<'a, T> {
     current: f64,
     wiggle: Value<'a, T>,
+    freq: Value<'a, T>,
 }
 
 impl<'a, T> BrownianNoise<'a, T> {
-    pub fn new(wiggle: impl Into<Value<'a, T>>) -> Self {
+    pub fn new(freq: impl Into<Value<'a, T>>, wiggle: impl Into<Value<'a, T>>) -> Self {
         Self {
             current: 0.0,
             wiggle: wiggle.into(),
+            freq: freq.into(),
         }
     }
 }
@@ -165,9 +190,12 @@ impl<'a, T: From<f64> + Into<f64>> ValueNode for BrownianNoise<'a, T> {
     type T = T;
     fn next(&mut self, env: &Env) -> Self::T {
         let wiggle:f64 = self.wiggle.next(env).into();
-        let wiggle = wiggle.max(0.00001);
-        let step: f64 = rand::thread_rng().gen_range(-wiggle, wiggle).into();
-        self.current = (self.current + step).min(1.0).max(-1.0);
+        let freq: f64 = self.freq.next(env).into();
+        if rand::thread_rng().gen::<f64>() < freq / env.sample_rate as f64 {
+            let wiggle = wiggle.max(0.00001);
+            let step: f64 = rand::thread_rng().gen_range(-wiggle, wiggle).into();
+            self.current = (self.current + step).min(1.0).max(-1.0);
+        }
         self.current.into()
     }
 }

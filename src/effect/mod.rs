@@ -4,7 +4,8 @@ use std::clone::Clone;
 
 use crate::{
     value::{ValueNode, CacheValue, Value},
-    filter::{AllPass, RLPF},
+    filter::{AllPass, RLPF, TrapezoidSVF},
+    oscillator::BrownianNoise,
     Env,
 };
 
@@ -100,4 +101,36 @@ impl<'a, T: Copy + Sub<Output=T> + Mul<Output=T> + Add<Output=T> + From<f64>> Va
         let mix = self.mix.next(env);
         (T::from(1.0)-mix)*v + mix*m*v
     }
+}
+
+
+pub struct SoftClip<'a, T> {
+    input: Value<'a, T>,
+}
+
+impl<'a, T> SoftClip<'a, T> {
+    pub fn new(input: impl  Into<Value<'a, T>>) -> Self {
+        Self {
+            input: input.into(),
+        }
+    }
+}
+
+impl<'a, T: Into<f64> + From<f64>> ValueNode for SoftClip<'a, T> {
+    type T = T;
+    fn next(&mut self, env: &Env) -> Self::T {
+        let v: f64 = self.input.next(env).into();
+        (v - v.powf(3.0)/3.0).into()
+    }
+}
+
+pub fn old_timeify<'a>(sig: impl Into<Value<'a, f64>>) -> Value<'a, f64> {
+    let mut sig: Value<f64> = sig.into();
+    sig = TrapezoidSVF::low_pass(sig, 800.0, 0.8).into();
+    sig = TrapezoidSVF::high(sig, 400.0, 0.8).into();
+    let impulses: Value<f64> = BrownianNoise::new(0.8, 0.5).into();
+    let low_crackle: Value<f64> = BrownianNoise::new(20.0, 0.1).into();
+    let low_crackle2: Value<f64> = BrownianNoise::new(30.0, 0.1).into();
+    sig = SoftClip::new(sig * 2.0).into();
+    sig * 1.0 + (impulses * 0.6 + low_crackle * 0.5 + low_crackle2 * 0.5) * 0.6
 }
