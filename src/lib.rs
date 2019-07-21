@@ -1,3 +1,5 @@
+#![feature(duration_float)]
+
 use std::time::Duration;
 
 pub mod value;

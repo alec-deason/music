@@ -59,29 +59,6 @@ lazy_static! {
     };
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Sine {
-    frequency: f64,
-    clock: u32,
-}
-impl Sine {
-    pub fn new(frequency: f64) -> Self {
-        Sine {
-            frequency,
-            clock: 0,
-        }
-    }
-}
-
-impl ValueNode for Sine {
-    type T = f64;
-    fn next(&mut self, env: &Env) -> Self::T {
-        let v = (2.0*PI*self.clock as f64*(self.frequency/env.sample_rate as f64)).sin();
-        self.clock += 1;
-        v
-    }
-}
-
 pub struct WaveTableSynth<'a, T> {
     frequency: Value<'a, T>,
     tables: Vec<(f64, Vec<f64>)>,
@@ -114,25 +91,30 @@ impl<'a, T> WaveTableSynth<'a, T> {
     }
 }
 
-impl<'a, T: Into<f64> + From<f64>> ValueNode for WaveTableSynth<'a, T> {
+impl<'a, T: Default + Clone + Into<f64> + From<f64>> ValueNode for WaveTableSynth<'a, T> {
     type T = T;
-    fn next(&mut self, env: &Env) -> Self::T {
-        let freq: f64 = self.frequency.next(env).into();
-        let mut table = &self.tables[0].1;
-        for (cap, t) in &self.tables {
-            table = t;
-            if cap >= &freq {
-                break;
-            }
-        }
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], offset: usize, samples: usize) {
+        let mut frequency: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
+        self.frequency.fill_buffer(env, &mut frequency, 0, samples);
 
-        let v = table[self.position as usize];
-        let len = table.len() as f64;
-        self.position += (len / env.sample_rate as f64) * freq;
-        while self.position >= len {
-            self.position -= len;
+        for i in 0..samples {
+            let mut table = &self.tables[0].1;
+            let freq: f64 = frequency[i].clone().into();
+            for (cap, t) in &self.tables {
+                table = t;
+                if cap >= &freq {
+                    break;
+                }
+            }
+
+            let v = table[self.position as usize];
+            let len = table.len() as f64;
+            self.position += (len / env.sample_rate as f64) * freq;
+            while self.position >= len {
+                self.position -= len;
+            }
+            buffer[offset + i] = v.into();
         }
-        v.into()
     }
 }
 
@@ -151,11 +133,13 @@ impl Impulses {
 }
 impl ValueNode for Impulses {
     type T = f64;
-    fn next(&mut self, env: &Env) -> Self::T {
-        if rand::thread_rng().gen::<f64>() < self.freq / env.sample_rate as f64 {
-            1.0
-        } else {
-            0.0
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+        for i in 0..samples {
+            buffer[i] = if rand::thread_rng().gen::<f64>() < self.freq / env.sample_rate as f64 {
+                1.0
+            } else {
+                0.0
+            };
         }
     }
 }
@@ -165,8 +149,10 @@ pub struct WhiteNoise;
 
 impl ValueNode for WhiteNoise {
     type T = f64;
-    fn next(&mut self, _env: &Env) -> Self::T {
-        rand::thread_rng().gen_range(-1.0, 1.0).into()
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+        for i in 0..samples {
+            buffer[i] = rand::thread_rng().gen_range(-1.0, 1.0).into();
+        }
     }
 }
 
@@ -186,16 +172,23 @@ impl<'a, T> BrownianNoise<'a, T> {
     }
 }
 
-impl<'a, T: From<f64> + Into<f64>> ValueNode for BrownianNoise<'a, T> {
+impl<'a, T: Default + Clone + From<f64> + Into<f64>> ValueNode for BrownianNoise<'a, T> {
     type T = T;
-    fn next(&mut self, env: &Env) -> Self::T {
-        let wiggle:f64 = self.wiggle.next(env).into();
-        let freq: f64 = self.freq.next(env).into();
-        if rand::thread_rng().gen::<f64>() < freq / env.sample_rate as f64 {
-            let wiggle = wiggle.max(0.00001);
-            let step: f64 = rand::thread_rng().gen_range(-wiggle, wiggle).into();
-            self.current = (self.current + step).min(1.0).max(-1.0);
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+        let mut freq: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
+        self.freq.fill_buffer(env, &mut freq, 0, samples);
+        let mut wiggle: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
+        self.wiggle.fill_buffer(env, &mut wiggle, 0, samples);
+
+        for i in 0..samples {
+            let wiggle:f64 = wiggle[i].clone().into();
+            let freq: f64 = freq[i].clone().into();
+            if rand::thread_rng().gen::<f64>() < freq / env.sample_rate as f64 {
+                let wiggle = wiggle.max(0.00001);
+                let step: f64 = rand::thread_rng().gen_range(-wiggle, wiggle).into();
+                self.current = (self.current + step).min(1.0).max(-1.0);
+            }
+            buffer[i] = self.current.into();
         }
-        self.current.into()
     }
 }

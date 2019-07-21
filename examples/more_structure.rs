@@ -492,11 +492,12 @@ pub fn main() {
 
     
     let mut env = Env::new(44100);
-    let chunk_size = 2048;
+    let chunk_size = 1024;
     let total_samples = env.sample_rate as usize*target_len;
     for _ in 0..total_samples / chunk_size {
         let mut buffer_left = vec![0.0; chunk_size];
         sig.fill_buffer(&mut env, &mut buffer_left, 0, chunk_size);
+        env.time += Duration::from_millis((chunk_size * 1000) as u64 / env.sample_rate as u64);
         let amp = 0.25;
         for left in buffer_left {
             io::stdout().write_f32::<LittleEndian>(left as f32 * amp).unwrap();    

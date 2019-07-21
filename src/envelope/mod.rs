@@ -85,27 +85,29 @@ struct RunningADSR {
 
 impl ValueNode for RunningADSR {
     type T = f64;
-    fn next(&mut self, env: &Env) -> Self::T {
-        if self.active {
-            let v = if self.clock < self.attack {
-                let d = self.attack - self.clock;
-                1.0 - (d / self.attack).powf(self.curve)
-            } else if self.clock < self.attack+self.decay {
-                let d = (self.attack+self.decay) - self.clock;
-                1.0 - (d / self.decay).powf(self.clock) * (1.0 - self.sustain_level)
-            } else if self.clock < self.attack+self.decay+self.duration {
-                self.sustain_level
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+        for i in 0..samples {
+            buffer[i] = if self.active {
+                let v = if self.clock < self.attack {
+                    let d = self.attack - self.clock;
+                    1.0 - (d / self.attack).powf(self.curve)
+                } else if self.clock < self.attack+self.decay {
+                    let d = (self.attack+self.decay) - self.clock;
+                    1.0 - (d / self.decay).powf(self.clock) * (1.0 - self.sustain_level)
+                } else if self.clock < self.attack+self.decay+self.duration {
+                    self.sustain_level
+                } else {
+                    let d = (self.attack+self.decay+self.duration+self.release) - self.clock;
+                    (d / self.release).powf(self.curve) * self.sustain_level
+                };
+                self.clock += 1.0 / env.sample_rate as f64;
+                if self.clock > self.attack + self.decay + self.duration + self.release {
+                    self.active = false;
+                }
+                v
             } else {
-                let d = (self.attack+self.decay+self.duration+self.release) - self.clock;
-                (d / self.release).powf(self.curve) * self.sustain_level
+                0.0
             };
-            self.clock += 1.0 / env.sample_rate as f64;
-            if self.clock > self.attack + self.decay + self.duration + self.release {
-                self.active = false;
-            }
-            v
-        } else {
-            0.0
         }
     }
 }

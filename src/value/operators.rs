@@ -12,17 +12,22 @@ macro_rules! value_binary_operator {
                 b: Value<'a, T>,
             }
 
-            impl<'a, T> ValueNode for Operator<'a, T>
+            impl<'a, T: Default + Clone> ValueNode for Operator<'a, T>
                 where T: $operator_name<Output = T> + 'static {
                     type T = T;
-                    fn next(&mut self, env: &Env) -> T {
-                        let a = self.a.next(env);
-                        let b = self.b.next(env);
-                        a $operation b
+                    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+                        let mut a: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
+                        self.a.fill_buffer(env, &mut a, 0, samples);
+                        let mut b: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
+                        self.b.fill_buffer(env, &mut b, 0, samples);
+
+                        for i in 0..samples {
+                            buffer[offset + i] = a[i].clone() $operation b[i].clone();
+                        }
                     }
             }
 
-            impl<'a, T: $operator_name<Output = T> + 'static, D: Into<Value<'a, T>>> $operator_name<D> for Value<'a, T> {
+            impl<'a, T: $operator_name<Output = T> + Default + Clone + 'static, D: Into<Value<'a, T>>> $operator_name<D> for Value<'a, T> {
                 type Output = Value<'a, T>;
 
                 #[inline]
@@ -76,13 +81,17 @@ mod neg {
     pub struct Operator<'a, T> {
         v: Value<'a, T>,
     }
-    impl<'a, T: Neg<Output = T>> ValueNode for Operator<'a, T> {
+    impl<'a, T: Default + Clone + Neg<Output = T>> ValueNode for Operator<'a, T> {
             type T = T;
-            fn next(&mut self, env: &Env) -> T {
-                -self.v.next(env)
+            fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+                let mut v: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
+                self.v.fill_buffer(env, &mut v, 0, samples);
+                for i in 0..samples {
+                    buffer[offset + i] = -v[i].clone();
+                }
             }
     }
-    impl<'a, T: Neg<Output = T> + 'static> Neg for Value<'a, T>
+    impl<'a, T: Default + Clone + Neg<Output = T> + 'static> Neg for Value<'a, T>
         where T: Neg<Output = T> {
         type Output = Value<'a, T>;
 
@@ -103,13 +112,17 @@ mod not {
     pub struct Operator<'a, T> {
         v: Value<'a, T>,
     }
-    impl<'a, T: Not<Output = T>> ValueNode for Operator<'a, T> {
+    impl<'a, T: Default + Clone + Not<Output = T>> ValueNode for Operator<'a, T> {
             type T = T;
-            fn next(&mut self, env: &Env) -> T {
-                !self.v.next(env)
+            fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+                let mut v: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
+                self.v.fill_buffer(env, &mut v, 0, samples);
+                for i in 0..samples {
+                    buffer[offset + i] = !v[i].clone();
+                }
             }
     }
-    impl<'a, T: Not<Output = T> + 'static> Not for Value<'a, T>
+    impl<'a, T: Clone + Not<Output = T> + 'static> Not for Value<'a, T>
         where T: Not<Output = T> {
         type Output = Operator<'a, T>;
 

@@ -13,101 +13,13 @@ pub struct Note {
     pub frequency: f64,
 }
 
-pub struct IteratorSequence<'a, T> {
-    instrument: Box<Fn(Note) -> Value<'a, T> + 'a>,
-    duration: Option<Box<dyn Iterator<Item = Duration> + 'a>>,
-    amplitude: Option<Box<dyn Iterator<Item = f64> + 'a>>,
-    frequency: Option<Box<dyn Iterator<Item = f64> + 'a>>,
-}
-
-struct RunningIteratorSequence<'a, T> {
-    instrument: Box<Fn(Note) -> Value<'a, T> + 'a>,
-    duration: Box<dyn Iterator<Item = Duration> + 'a>,
-    amplitude: Box<dyn Iterator<Item = f64> + 'a>,
-    frequency: Box<dyn Iterator<Item = f64> + 'a>,
-
-    current_notes: VecDeque<Option<Value<'a, T>>>,
-    trigger: Duration,
-}
-
-impl<'a, T> IteratorSequence<'a, T> {
-    pub fn new<F: Fn(Note) -> Value<'a, T> + 'a>(instrument: F) -> Self {
-        Self {
-            instrument: Box::new(instrument),
-            duration: None,
-            amplitude: None,
-            frequency: None,
-        }
-    }
-
-    pub fn duration<I: IntoIterator<Item = Duration> + 'a>(mut self, duration: I) -> Self {
-        self.duration = Some(Box::new(duration.into_iter()));
-        self
-    }
-
-    pub fn amplitude<I: IntoIterator<Item = f64> + 'a>(mut self, amplitude: I) -> Self {
-        self.amplitude = Some(Box::new(amplitude.into_iter()));
-        self
-    }
-
-    pub fn frequency<I: IntoIterator<Item = f64> + 'a>(mut self, frequency: I) -> Self {
-        self.frequency = Some(Box::new(frequency.into_iter()));
-        self
-    }
-}
-
-impl<'a, T: From<f64> + Add<Output = T> + 'a> From<IteratorSequence<'a, T>> for Value<'a, T> {
-    fn from(iterator: IteratorSequence<'a, T>) -> Value<'a, T> {
-        let running = RunningIteratorSequence {
-            instrument: iterator.instrument,
-            duration: iterator.duration.unwrap_or_else(|| Box::new(iter::repeat(Duration::new(1, 0)))),
-            amplitude: iterator.amplitude.unwrap_or_else(|| Box::new(iter::repeat(1.0))),
-            frequency: iterator.frequency.unwrap_or_else(|| Box::new(iter::repeat(440.0))),
-
-            current_notes: (0..3).map(|_| None).collect(),
-            trigger: Duration::new(0, 0),
-        };
-        running.into()
-    }
-}
-
-impl<'a, T: From<f64> + Add<Output=T>> ValueNode for RunningIteratorSequence<'a, T> {
-    type T = T;
-    fn next(&mut self, env: &Env) -> Self::T {
-        if env.time > self.trigger {
-            let duration = self.duration.next();
-            let frequency = self.frequency.next();
-            let amplitude = self.amplitude.next();
-            if duration.is_some() & frequency.is_some() & amplitude.is_some() {
-                let duration = duration.unwrap();
-                self.trigger = env.time + duration;
-                let note = Note {
-                    duration: duration,
-                    amplitude: amplitude.unwrap(),
-                    frequency: frequency.unwrap(),
-                };
-                self.current_notes[0].replace((self.instrument)(note));
-                self.current_notes.rotate_left(1);
-            }
-        }
-
-        let mut out: T = 0.0.into();
-        for note in &mut self.current_notes {
-            if let Some(note) = note {
-                out = out + note.next(env);
-            }
-        }
-        out
-    }
-}
-
 
 pub struct FancySequence<'a, S, T> {
     state: S,
     generator: Box<Fn(&mut S) -> Option<(Duration, Value<'a, T>)> + 'a>,
 
     current_notes: VecDeque<Option<Value<'a, T>>>,
-    trigger: Duration,
+    samples_remaining: usize,
 }
 
 impl<'a, S, T> FancySequence<'a, S, T> {
@@ -117,7 +29,7 @@ impl<'a, S, T> FancySequence<'a, S, T> {
             generator: Box::new(generator),
 
             current_notes: (0..5).map(|_| None).collect(),
-            trigger: Duration::new(0, 0),
+            samples_remaining: 0,
         }
     }
 
@@ -128,25 +40,40 @@ pub fn sequence_from_iterator<'a, T, I: IntoIterator<Item = (Duration, Value<'a,
     FancySequence::new(iterator, |iterator| iterator.next())
 }
 
-impl<'a, S, T: From<f64> + Add<Output=T>> ValueNode for FancySequence<'a, S, T> {
+impl<'a, S, T: Default + Add<Output=T> + Clone> ValueNode for FancySequence<'a, S, T> {
     type T = T;
-    fn next(&mut self, env: &Env) -> Self::T {
-        if env.time > self.trigger {
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+        if self.samples_remaining == 0 {
             let note = (self.generator)(&mut self.state);
             if note.is_some() {
                 let (duration, note) = note.unwrap();
-                self.trigger = env.time + duration;
                 self.current_notes[0].replace(note);
                 self.current_notes.rotate_left(1);
+                self.samples_remaining = (duration.as_secs_f64() * env.sample_rate as f64) as usize;
+            } else {
+                self.samples_remaining = std::usize::MAX;
             }
         }
-
-        let mut out: T = 0.0.into();
+        let remaining = self.samples_remaining.min(samples);
+        let mut result: Vec<Self::T> = (0..remaining).map(|_| Self::T::default()).collect();
+        let mut is_first = true;
         for note in &mut self.current_notes {
             if let Some(note) = note {
-                out = out + note.next(env);
+                note.fill_buffer(env, &mut result, 0, remaining);
+                if is_first {
+                    buffer[offset..offset+remaining].clone_from_slice(&result);
+                    is_first = false;
+                } else {
+                    for i in 0..remaining {
+                        let cur = buffer[offset+i].clone();
+                        buffer[offset+i] = cur + result[i].clone();
+                    }
+                }
             }
         }
-        out
+        self.samples_remaining -= remaining;
+        if remaining < samples {
+            self.fill_buffer(env, buffer, offset+remaining, samples - remaining);
+        }
     }
 }

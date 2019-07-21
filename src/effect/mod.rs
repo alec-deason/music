@@ -1,3 +1,4 @@
+use num::Num;
 use std::ops::{Mul, Sub, Add};
 use std::collections::VecDeque;
 use std::clone::Clone;
@@ -26,16 +27,21 @@ impl<'a, T: Into<f64>> Delay<'a, T> {
 }
 
 
-impl<'a, T: From<f64>> ValueNode for Delay<'a, T> {
+impl<'a, T: Default + Clone> ValueNode for Delay<'a, T> {
     type T = T;
-    fn next(&mut self, env: &Env) -> Self::T {
-        let delay: f64 = self.delay.next(env).into();
-        let idx = (delay * env.sample_rate as f64) as usize;
-        if idx >= self.buffer.len() {
-            self.buffer.resize_with(idx + 1, || 0.0.into());
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+        let mut delay: Vec<f64> = vec![0.0; samples];
+        self.delay.fill_buffer(env, &mut delay, 0, samples);
+        let mut input: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
+        self.input.fill_buffer(env, &mut input, 0, samples);
+        for i in 0..samples {
+            let idx = (delay[i] * env.sample_rate as f64) as usize + i;
+            if idx >= self.buffer.len() {
+                self.buffer.resize_with(idx + 1, || T::default());
+            }
+            self.buffer[idx] = input[i].clone();
+            buffer[i+offset] = self.buffer.pop_front().unwrap_or_else(|| T::default());
         }
-        self.buffer[idx] = self.input.next(env);
-        self.buffer.pop_front().unwrap_or_else(|| 0.0.into())
     }
 }
 
@@ -71,8 +77,8 @@ impl<'a> Reverb<'a> {
 
 impl<'a> ValueNode for Reverb<'a> {
     type T = f64;
-    fn next(&mut self, env: &Env) -> Self::T {
-        self.output.next(env)
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+        self.output.fill_buffer(env, buffer, offset, samples);
     }
 }
 
@@ -93,13 +99,19 @@ impl<'a, T> RingModulator<'a, T> {
 }
 
 
-impl<'a, T: Copy + Sub<Output=T> + Mul<Output=T> + Add<Output=T> + From<f64>> ValueNode for RingModulator<'a, T> {
+impl<'a, T: Copy + Num + Default> ValueNode for RingModulator<'a, T> {
     type T = T;
-    fn next(&mut self, env: &Env) -> Self::T {
-        let v = self.input.next(env);
-        let m = self.modulator.next(env);
-        let mix = self.mix.next(env);
-        (T::from(1.0)-mix)*v + mix*m*v
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], offset: usize, samples: usize) {
+        let mut input: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
+        self.input.fill_buffer(env, &mut input, 0, samples);
+        let mut modulator: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
+        self.modulator.fill_buffer(env, &mut modulator, 0, samples);
+        let mut mix: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
+        self.mix.fill_buffer(env, &mut mix, 0, samples);
+
+        buffer[offset..offset+samples].iter_mut().zip(input).zip(modulator).zip(mix).for_each(|(((b, v), modulator), mix)| {
+            *b = (T::one() - mix)*v + mix*modulator*v;
+        });
     }
 }
 
@@ -116,11 +128,15 @@ impl<'a, T> SoftClip<'a, T> {
     }
 }
 
-impl<'a, T: Into<f64> + From<f64>> ValueNode for SoftClip<'a, T> {
+impl<'a, T: Default + Into<f64> + From<f64>> ValueNode for SoftClip<'a, T> {
     type T = T;
-    fn next(&mut self, env: &Env) -> Self::T {
-        let v: f64 = self.input.next(env).into();
-        (v - v.powf(3.0)/3.0).into()
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], offset: usize, samples: usize) {
+        let mut input: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
+        self.input.fill_buffer(env, &mut input, 0, samples);
+        buffer[offset..offset+samples].iter_mut().zip(input).for_each(|(b, v)| {
+            let v: f64 = v.into();
+            *b = (v - v.powf(3.0)/3.0).into();
+        });
     }
 }
 

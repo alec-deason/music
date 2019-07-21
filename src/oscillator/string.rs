@@ -37,12 +37,14 @@ impl PluckedString {
 
 impl ValueNode for PluckedString {
     type T = f64;
-    fn next(&mut self, _env: &Env) -> Self::T {
-        let sample = self.smoothing * self.buffer[self.position] + (1.0 - self.smoothing) * self.previous;
-        self.buffer[self.position] = sample;
-        self.previous = sample;
-        self.position = (self.position + 1) % self.buffer.len();
-        sample * self.amp
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+        for i in 0..samples {
+            let sample = self.smoothing * self.buffer[self.position] + (1.0 - self.smoothing) * self.previous;
+            self.buffer[self.position] = sample;
+            self.previous = sample;
+            self.position = (self.position + 1) % self.buffer.len();
+            buffer[i] = sample * self.amp;
+        }
     }
 }
 
@@ -71,7 +73,9 @@ impl<'a> DrivenString<'a> {
 
 impl<'a> ValueNode for DrivenString<'a> {
     type T = f64;
-    fn next(&mut self, env: &Env) -> Self::T {
-        self.output.next(env)
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+        let mut output: Vec<f64> = Vec::with_capacity(samples);
+        self.output.fill_buffer(env, &mut output, 0, samples);
+        buffer[offset..offset+samples].copy_from_slice(&output);
     }
 }
