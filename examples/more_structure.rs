@@ -9,12 +9,15 @@ use rand_chacha::ChaChaRng;
 use byteorder::{WriteBytesExt, LittleEndian};
 use std::io::{self};
 
+use regex::Regex;
+
 
 use music::{
     Env,
     value::*,
     oscillator::*,
     oscillator::string::*,
+    oscillator::sampler::*,
     envelope::*,
     filter::*,
     effect::*,
@@ -391,6 +394,14 @@ pub fn main() {
     let beat = 60000.0/bpm;
     let target_len = env::args().into_iter().nth(1).unwrap_or("10".to_string()).parse::<usize>().unwrap();
 
+    let banjo = SampleSet::from_directory(
+        &"samples/banjo",
+        &Regex::new(r".*/banjo_(?P<note>[A-G]s?)(?P<octave>[0-9])_very-long_forte_normal.mp3").unwrap()
+    );
+    let play_banjo = |note: &Note| {
+        banjo.play(note.frequency).unwrap() * note.amplitude
+    };
+
     let swing = 0.0;
     let mut beat_clock = 0.0;
     let melody_string = rng.gen_range(0, 3);
@@ -449,9 +460,9 @@ pub fn main() {
                         amplitude: *amp,
                     };
                     if bass_string == 0 {
-                        let mut pluck: Value<f64> = PluckedString::new(note.frequency, 0.15).into();
-                        pluck = RLPF::new(pluck, 2000.0, 0.25).into();
-                        sig = sig + pluck;
+                        //let mut pluck: Value<f64> = PluckedString::new(note.frequency, 0.15).into();
+                        //pluck = RLPF::new(pluck, 2000.0, 0.25).into();
+                        sig = sig + play_banjo(&note);;
                     } else if bass_string == 1 {
                         sig = sig + chirp(note, buzzyness);
                     } else if bass_string == 2 {

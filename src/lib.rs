@@ -9,6 +9,7 @@ pub mod envelope;
 pub mod effect;
 pub mod sequence;
 pub mod note;
+pub mod composition;
 
 #[derive(Clone, Debug)]
 pub struct Env {

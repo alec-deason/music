@@ -1,4 +1,5 @@
 pub mod string;
+pub mod sampler;
 
 use std::f64::consts::PI;
 use rand::Rng;
