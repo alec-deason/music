@@ -37,22 +37,9 @@ impl SampleSet {
                     _ => panic!(),
                 };
                 let octave = captures.name("octave").unwrap().as_str().parse::<u32>().unwrap();
-                let note = note + octave*12;
+                let adjusted_note = note + (octave+1)*12;
 
-                let mut decoder = Decoder::new(File::open(entry.path()).unwrap());
-                let mut sample = vec![];
-                loop {
-                    match decoder.next_frame() {
-                        Ok(Frame { data, sample_rate, channels, .. }) => {
-                            if channels != 1 { panic!() }
-                            if sample_rate != 44100 { panic!() }
-                            sample.extend(data.iter().cloned().map(|s| s as f64 / 65536.0));
-                        },
-                        Err(Error::Eof) => break,
-                        Err(e) => panic!("{:?}", e),
-                    }
-                }
-                samples.push(((note as f64).frequency_from_midi(), sample));
+                samples.push(((adjusted_note as f64).frequency_from_midi(), Self::samples_from_file(entry.path())));
             }
         }
 
@@ -61,11 +48,40 @@ impl SampleSet {
         }
     }
 
+    fn samples_from_file(path: impl AsRef<Path>) -> Vec<f64> {
+        let mut decoder = Decoder::new(File::open(path).unwrap());
+        let mut sample = vec![];
+        loop {
+            match decoder.next_frame() {
+                Ok(Frame { data, sample_rate, channels, .. }) => {
+                    if channels != 1 { panic!() }
+                    if sample_rate != 44100 { panic!() }
+                    sample.extend(data.iter().cloned().map(|s| s as f64 / 65536.0));
+                },
+                Err(Error::Eof) => break,
+                Err(e) => panic!("{:?}", e),
+            }
+        }
+        sample
+    }
+
+    pub fn from_file(path: impl AsRef<Path>, freq: f64) -> Self {
+        Self {
+            samples: vec![(freq, Self::samples_from_file(path))],
+        }
+    }
+
     pub fn play<'a>(&'a self, freq: f64) -> Option<Value<'a, f64>> {
         let mut idxs: Vec<_> = (0..self.samples.len()).collect();
         idxs.sort_by_key(|i| ((self.samples[*i].0 - freq).abs() * 10000.0) as i32);
 
-        Some(Sampler::new(&self.samples[idxs[0]].1).into())
+        let (chosen_freq, samples) = &self.samples[idxs[0]];
+
+        if (chosen_freq - freq).abs() > 5.0 {
+            eprintln!("Bad note: {} ({})", freq, (chosen_freq - freq).abs());
+        }
+
+        Some(Sampler::new(samples).into())
     }
 }
 
