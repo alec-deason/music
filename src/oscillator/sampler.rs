@@ -24,15 +24,20 @@ impl SampleSet {
                 let note = match captures.name("note").unwrap().as_str().to_uppercase().as_str() {
                     "C" => 0,
                     "CS" => 1,
+                    "C#" => 1,
                     "D" => 2,
                     "DS" => 3,
+                    "D#" => 3,
                     "E" => 4,
                     "F" => 5,
                     "FS" => 6,
+                    "F#" => 6,
                     "G" => 7,
                     "GS" => 8,
+                    "G#" => 8,
                     "A" => 9,
                     "AS" => 10,
+                    "A#" => 10,
                     "B" => 11,
                     _ => panic!(),
                 };
@@ -77,24 +82,29 @@ impl SampleSet {
 
         let (chosen_freq, samples) = &self.samples[idxs[0]];
 
-        if (chosen_freq - freq).abs() > 5.0 {
-            eprintln!("Bad note: {} ({})", freq, (chosen_freq - freq).abs());
-        }
+        let rate = if self.samples.len() > 1 {
+            freq / chosen_freq
+        } else {
+            1.0
+        };
 
-        Some(Sampler::new(samples).into())
+
+        Some(Sampler::new(samples, rate).into())
     }
 }
 
 struct Sampler<'a> {
     samples: &'a[f64],
-    pos: usize,
+    pos: f64,
+    rate: f64,
 }
 
 impl<'a> Sampler<'a> {
-    fn new(samples: &'a [f64]) -> Self {
+    fn new(samples: &'a [f64], rate: f64) -> Self {
         Self {
             samples,
-            pos: 0,
+            pos: 0.0,
+            rate,
         }
     }
 }
@@ -104,11 +114,12 @@ impl<'a> ValueNode for Sampler<'a> {
     type T = f64;
     fn fill_buffer(&mut self, _env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
         for i in 0..samples {
-            buffer[offset+i] = if self.pos >= self.samples.len() {
+            buffer[offset+i] = if self.pos as usize >= self.samples.len() {
                 0.0
             } else {
-                self.pos += 1;
-                self.samples[self.pos-1]
+                let s = self.samples[self.pos as usize];
+                self.pos += self.rate;
+                s
             };
         }
     }
