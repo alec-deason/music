@@ -137,8 +137,29 @@ fn accent(beat_clock: f64) -> f64 {
 }
 
 fn roll(chord: &Vec<u32>, rng: &mut impl Rng) -> Vec<(u32, f64)> {
-    match rng.gen_range(0, 2) {
-        0 => {
+    [
+            // Mixed
+            vec![
+                (chord[0], 1.0),
+                (chord[1], 0.8),
+                (chord[2] + 3, 0.8),
+                (chord[2], 1.0),
+                (chord[0] - 3, 0.8),
+                (chord[1], 0.8),
+                (chord[2] + 3, 1.0),
+                (chord[2], 0.8),
+            ],
+            // Forward-Backward
+            vec![
+                (chord[0], 1.0),
+                (chord[1], 0.8),
+                (chord[2], 0.8),
+                (chord[2] + 3, 1.0),
+                (chord[2], 0.8),
+                (chord[1], 0.8),
+                (chord[0], 1.0),
+                (chord[2], 0.8),
+            ],
             // Backward
             vec![
                 (chord[2], 1.0),
@@ -149,9 +170,7 @@ fn roll(chord: &Vec<u32>, rng: &mut impl Rng) -> Vec<(u32, f64)> {
                 (chord[0], 0.8),
                 (chord[2], 1.0),
                 (chord[1], 0.8),
-            ]
-        }
-        _ => {
+            ],
             // Forward
             vec![
                 (chord[0], 1.0),
@@ -162,17 +181,25 @@ fn roll(chord: &Vec<u32>, rng: &mut impl Rng) -> Vec<(u32, f64)> {
                 (chord[2], 0.8),
                 (chord[0], 1.0),
                 (chord[1], 0.8),
-            ]
-        }
-    }
+            ],
+    ].choose(rng).unwrap().clone()
+}
+
+fn brownian_jiggle(state: f64, min: f64, max: f64, rng: &mut impl Rng) -> f64 {
+    let mut state = state + rng.gen_range(-0.1, 0.1);
+    state = state.max(min).min(max);
+    state
 }
 
 fn fill_from_chords(composition: &mut Composition<Message>, beats: u32, rng: &mut impl Rng) -> Option<usize> {
     let density = 1.0;
     let decoration_prob = 0.6;
-    let long_note_prob = 0.8;
-    let drone_prob = 0.8;
-    let roll_prob = 0.6;
+    let mut decoration_prob_jiggle = rng.gen_range(0.0, 1.0);
+    let long_note_prob = 0.0;
+    let drone_prob = 0.4;
+    let mut drone_prob_jiggle = rng.gen_range(0.0, 1.0);
+    let roll_prob = 0.4;
+    let mut roll_prob_jiggle = rng.gen_range(0.0, 1.0);
     let passing_note_prob = 0.5;
     let anticipation_prob = 0.3;
 
@@ -190,6 +217,9 @@ fn fill_from_chords(composition: &mut Composition<Message>, beats: u32, rng: &mu
     let mut current = 0;
     let mut previous = None;
     while len <= beats as f64 {
+        decoration_prob_jiggle = brownian_jiggle(decoration_prob_jiggle, 0.0, 2.0, rng);
+        roll_prob_jiggle = brownian_jiggle(roll_prob_jiggle, 0.6, 2.0, rng);
+        drone_prob_jiggle = brownian_jiggle(drone_prob_jiggle, 0.6, 2.0, rng);
         let mut chord = None;
         let mut key = None;
         let beat = pattern[i % pattern.len()] as f64 * (1.0/4.0);
@@ -218,7 +248,7 @@ fn fill_from_chords(composition: &mut Composition<Message>, beats: u32, rng: &mu
                 octave = 0;
                 let tone = (chord[current as usize] as i32 + octave*12) as u32;
                 let mut did_decorate = false;
-                if rng.gen::<f64>() < decoration_prob {
+                if rng.gen::<f64>() < decoration_prob * decoration_prob_jiggle {
                     if previous.is_some() && rng.gen::<f64>() < passing_note_prob {
                         let direction = if previous.unwrap() < tone { 1 } else { -1 };
                         let mut passing = previous.unwrap() as i32 + direction;
@@ -246,18 +276,24 @@ fn fill_from_chords(composition: &mut Composition<Message>, beats: u32, rng: &mu
                     }
                 }
                 if !did_decorate {
-                    if (len * beat) % 2.0 == 0.0 && rng.gen::<f64>() < roll_prob {
+                    if (len * beat) % 2.0 == 0.0 && rng.gen::<f64>() < roll_prob * roll_prob_jiggle {
                         let roll = roll(&chord, rng);
                         for (tone, amp) in roll {
                             composition.add_annotation(len, beat / 2.0, Message::Note(tone as u32));
                             voice.push((beat / 2.0, vec![(tone as u32, amp)]));
                             len += beat / 2.0;
                         }
-                    } else if rng.gen::<f64>() < drone_prob {
+                    } else if rng.gen::<f64>() < drone_prob * drone_prob_jiggle {
                         let amp = accent(len);
-                        composition.add_annotation(len, beat / 2.0, Message::Note(tone as u32));
-                        voice.push((beat / 2.0, vec![(tone as u32, amp)]));
+                        composition.add_annotation(len, beat, Message::Note(tone as u32));
+                        voice.push((beat, vec![(tone as u32, amp)]));
+                        len += beat;
+
+                        let amp = accent(len);
+                        composition.add_annotation(len, beat / 2.0, Message::Note(67));
+                        voice.push((beat / 2.0, chord.iter().map(|t| (*t, amp)).collect()));
                         len += beat / 2.0;
+
                         let amp = accent(len);
                         composition.add_annotation(len, beat / 2.0, Message::Note(67));
                         voice.push((beat / 2.0, vec![(67, amp*0.5)]));
@@ -290,15 +326,46 @@ fn fill_from_chords(composition: &mut Composition<Message>, beats: u32, rng: &mu
     Some(composition.add_voice(voice))
 }
 
-fn rythm_fill(composition: &mut Composition<Message>, beats: u32, rng: &mut impl Rng) -> Option<usize> {
-    let pattern = [3, 1, 2, 2];
+fn fill_from_accompanyment(composition: &mut Composition<Message>, beats: u32, rng: &mut impl Rng) -> Option<usize> {
+    let density = 0.8;
+    let double_prob = 0.8;
+
     let mut voice = vec![];
+    let pattern = [2; 4];
     let mut len = 0.0;
     let mut i = 0;
     while len <= beats as f64 {
+        let mut chord = None;
+        let mut key = None;
+        let mut notes = vec![];
+        let beat = pattern[i % pattern.len()] as f64 * (1.0/ if rng.gen::<f64>() < double_prob { 8.0 } else { 4.0 });
+        for annotation in composition.annotations(len as f64, 0.0) {
+            match &annotation.message {
+                Message::Chord(c) => chord = Some(c.clone()),
+                Message::Note(c) => notes.push(c.clone()),
+                Message::Key(k) => key = Some(k.clone()),
+                _ => (),
+            }
+        }
+        let key = key.unwrap();
+        let mut degrees: Vec<_> = (0..7).collect();
+        degrees.shuffle(rng);
         let amp = accent(len);
-        let beat = pattern[i % pattern.len()] as f64 * (1.0/4.0);
-        voice.push((beat, vec![(0, amp)]));
+        let mut success = false;
+        if rng.gen::<f64>() < density {
+            if notes.len() > 0 {
+                for degree in degrees {
+                    if consonance(key.pitch(degree), notes[0]) {
+                        voice.push((beat, vec![(key.pitch(degree), amp)]));
+                        success = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if ! success {
+            voice.push((beat, vec![]));
+        }
         len += beat;
         i += 1;
     }
@@ -306,12 +373,14 @@ fn rythm_fill(composition: &mut Composition<Message>, beats: u32, rng: &mut impl
 }
 
 fn bass_fill(composition: &mut Composition<Message>, beats: u32, rng: &mut impl Rng) -> Option<usize> {
-    let pattern = [3, 1, 2, 2];
     let pattern = [2; 4];
     let mut voice = vec![];
     let mut len = 0.0;
-    let mut i = 0;
-    let mut old_chord = None;
+    let mut i = 0i32;
+    let mut dir = 1;
+    let mut mode = false;
+    let mode_switch_prob = 0.05;
+    let mut note = 0;
     while len <= beats as f64 {
         let mut chord = None;
         for annotation in composition.annotations(len as f64, 0.0) {
@@ -320,16 +389,31 @@ fn bass_fill(composition: &mut Composition<Message>, beats: u32, rng: &mut impl 
                 _ => (),
             }
         }
-        if chord != old_chord {
-            i = 0;
-        }
-        old_chord = chord.clone();
         let chord = chord.unwrap();
         let amp = accent(len);
-        let beat = pattern[i % pattern.len()] as f64 * (1.0/4.0);
-        voice.push((beat, vec![(chord[i%chord.len()], amp)]));
+        let beat = pattern[i as usize % pattern.len()] as f64 * (1.0/4.0);
+
+        if mode {
+            voice.push((beat, vec![(chord[i as usize %chord.len()], amp)]));
+        } else {
+            let idx = if note % 2 == 0 {
+                0
+            } else {
+                chord.len() - 1
+            };
+            voice.push((beat, vec![(chord[idx], amp)]));
+        }
+        if rng.gen::<f64>() < mode_switch_prob {
+            mode = !mode;
+        }
         len += beat;
-        i += 1;
+        if i >= chord.len() as i32 {
+            dir = -1;
+        } else if i <= 0 {
+            dir = 1;
+        }
+        i += dir;
+        note += 1;
     }
     Some(composition.add_voice(voice))
 }
@@ -355,7 +439,7 @@ pub fn main() {
     let seed = env::args().into_iter().nth(2).unwrap_or("42".to_string()).parse::<u64>().unwrap();
     let mut rng = ChaChaRng::seed_from_u64(seed);
 
-    let bpm = 120.0;
+    let bpm = 110.0;
     let beat = 60000.0/bpm;
     let target_len = env::args().into_iter().nth(1).unwrap_or("10".to_string()).parse::<usize>().unwrap();
     let target_beats = (target_len as u32 * bpm as u32) / 60;
@@ -369,35 +453,35 @@ pub fn main() {
     let section_beats = (target_measures / 10) * 4;
     fill_chords(&mut intro, &key, section_beats, &mut rng);
     let melody = fill_from_chords(&mut intro, section_beats, &mut rng).unwrap();
-    let rythm = rythm_fill(&mut intro, section_beats, &mut rng).unwrap();
+    let accompanyment = fill_from_accompanyment(&mut intro, section_beats, &mut rng).unwrap();
     let bass = bass_fill(&mut intro, section_beats, &mut rng).unwrap();
 
     let mut section_a = Composition::new();
     let section_beats = (target_measures / 5) * 4;
     fill_chords(&mut section_a, &key, section_beats, &mut rng);
     fill_from_chords(&mut section_a, section_beats, &mut rng).unwrap();
-    rythm_fill(&mut section_a, section_beats, &mut rng).unwrap();
+    fill_from_accompanyment(&mut section_a, section_beats, &mut rng).unwrap();
     bass_fill(&mut section_a, section_beats, &mut rng).unwrap();
 
     let mut section_b = Composition::new();
     let section_beats = (target_measures / 5) * 4;
     fill_chords(&mut section_b, &key, section_beats, &mut rng);
     fill_from_chords(&mut section_b, section_beats, &mut rng).unwrap();
-    rythm_fill(&mut section_b, section_beats, &mut rng).unwrap();
+    fill_from_accompanyment(&mut section_b, section_beats, &mut rng).unwrap();
     bass_fill(&mut section_b, section_beats, &mut rng).unwrap();
 
     let mut section_c = Composition::new();
     let section_beats = (target_measures / 5) * 4;
     fill_chords(&mut section_c, &key, section_beats, &mut rng);
     fill_from_chords(&mut section_c, section_beats, &mut rng).unwrap();
-    rythm_fill(&mut section_c, section_beats, &mut rng).unwrap();
+    fill_from_accompanyment(&mut section_c, section_beats, &mut rng).unwrap();
     bass_fill(&mut section_c, section_beats, &mut rng).unwrap();
 
     let mut outro = Composition::new();
     let section_beats = (target_measures / 10) * 4;
     fill_chords(&mut outro, &key, section_beats, &mut rng);
     fill_from_chords(&mut outro, section_beats, &mut rng).unwrap();
-    rythm_fill(&mut outro, section_beats, &mut rng).unwrap();
+    fill_from_accompanyment(&mut outro, section_beats, &mut rng).unwrap();
     bass_fill(&mut outro, section_beats, &mut rng).unwrap();
 
     let mut composition = intro.clone();
@@ -415,12 +499,12 @@ pub fn main() {
     let play_banjo = |note: &Note| {
         banjo.play(note.frequency).unwrap() * note.amplitude
     };
-    let trombone = SampleSet::from_directory(
-        &"samples/trombone",
-        &Regex::new(r".*/trombone_(?P<note>[A-G]s?)(?P<octave>[0-9])_025_forte_normal_truncated.mp3").unwrap()
+    let trumpet = SampleSet::from_directory(
+        &"samples/trumpet",
+        &Regex::new(r".*/trumpet_(?P<note>[A-G]s?)(?P<octave>[0-9])_025_pianissimo_normal_truncated.mp3").unwrap()
     );
-    let play_trombone = |note: &Note| {
-        trombone.play(note.frequency / 2.0 ).unwrap() * note.amplitude
+    let play_trumpet = |note: &Note| {
+        trumpet.play(note.frequency ).unwrap() * note.amplitude
     };
     let double_bass = SampleSet::from_directory(
         &"samples/double_bass",
@@ -431,25 +515,9 @@ pub fn main() {
         let mut pluck: Value<f64> = PluckedString::new(note.frequency / 8.0, 0.09).into();
         RLPF::new(pluck, 1000.0, 0.1).into()
     };
-    let wood_block = SampleSet::from_file("samples/percussion/woodblock/woodblock__025_mezzo-forte_struck-singly.mp3", 0.0);
-    let play_wood_block = |note: &Note| {
-        wood_block.play(note.frequency).unwrap() * note.amplitude
-    };
-    let snare_drum = SampleSet::from_file("samples/snare_drum/snare-drum__025_mezzo-forte_with-snares.mp3", 0.0);
-    let play_snare_drum = |note: &Note| {
-        snare_drum.play(note.frequency).unwrap() * note.amplitude
-    };
-    let cymbals = SampleSet::from_file("samples/percussion/clash cymbals/clash-cymbals__025_mezzo-forte_undamped.mp3", 0.0);
-    let play_cymbals = |note: &Note| {
-        cymbals.play(note.frequency).unwrap() * note.amplitude
-    };
-    let washboard = SampleSet::from_file("samples/percussion/washboard/washboard__05_forte_scraped.mp3", 0.0);
-    let play_washboard = |note: &Note| {
-        washboard.play(note.frequency).unwrap() * note.amplitude
-    };
-    let mut sig: Value<f64> = render_voice(composition.voice(melody).unwrap(), &play_banjo, beat) * 0.7;
-    sig = sig + render_voice(composition.voice(bass).unwrap(), &play_double_bass, beat) * 0.3;
-    //sig = sig + render_voice(composition.voice(rythm).unwrap(), &play_washboard, beat) * 0.3;
+    let mut sig: Value<f64> = render_voice(composition.voice(melody).unwrap(), &play_banjo, beat) * 1.0;
+    //sig = sig + render_voice(composition.voice(accompanyment).unwrap(), &play_trumpet, beat) * 1.5;
+    sig = sig + render_voice(composition.voice(bass).unwrap(), &play_double_bass, beat) * 0.7;
     
     sig = Reverb::new(sig, 0.9, 0.1, 1000.0, 2.0).into();
 
