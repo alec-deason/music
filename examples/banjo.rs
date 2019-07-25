@@ -372,6 +372,10 @@ fn fill_from_accompanyment(composition: &mut Composition<Message>, beats: u32, r
     Some(composition.add_voice(voice))
 }
 
+fn silence_fill(composition: &mut Composition<Message>, beats: u32) -> Option<usize> {
+    Some(composition.add_voice(vec![(beats as f64, vec![])]))
+}
+
 fn bass_fill(composition: &mut Composition<Message>, beats: u32, rng: &mut impl Rng) -> Option<usize> {
     let pattern = [2; 4];
     let mut voice = vec![];
@@ -466,9 +470,9 @@ pub fn main() {
     let mut section_b = Composition::new();
     let section_beats = (target_measures / 5) * 4;
     fill_chords(&mut section_b, &key, section_beats, &mut rng);
-    fill_from_chords(&mut section_b, section_beats, &mut rng).unwrap();
+    silence_fill(&mut section_b, section_beats);
     fill_from_accompanyment(&mut section_b, section_beats, &mut rng).unwrap();
-    bass_fill(&mut section_b, section_beats, &mut rng).unwrap();
+    fill_from_chords(&mut section_b, section_beats, &mut rng).unwrap();
 
     let mut section_c = Composition::new();
     let section_beats = (target_measures / 5) * 4;
