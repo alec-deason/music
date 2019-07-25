@@ -85,7 +85,7 @@ struct RunningADSR {
 
 impl ValueNode for RunningADSR {
     type T = f64;
-    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
         for i in 0..samples {
             buffer[i] = if self.active {
                 let v = if self.clock < self.attack {

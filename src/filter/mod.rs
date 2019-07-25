@@ -44,9 +44,9 @@ impl<'a> RLPF<'a> {
 
     fn parameters(&mut self, env: &Env, samples: usize) -> Vec<(f64, f64, f64)> {
         let mut cutoff: Vec<f64> = vec![0.0; samples];
-        self.cutoff.fill_buffer(env, &mut cutoff, 0, samples);
+        self.cutoff.fill_buffer(env, &mut cutoff, samples);
         let mut q: Vec<f64> = vec![0.0; samples];
-        self.q.fill_buffer(env, &mut q, 0, samples);
+        self.q.fill_buffer(env, &mut q, samples);
 
         let mut result = vec![(0.0, 0.0, 0.0); samples];
         for i in 0..samples {
@@ -73,10 +73,10 @@ impl<'a> RLPF<'a> {
 
 impl<'a> ValueNode for RLPF<'a> {
     type T = f64;
-    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
         let parameters = self.parameters(env, samples);
         let mut input: Vec<f64> = (0..samples).map(|_| Self::T::default()).collect();
-        self.input.fill_buffer(env, &mut input, 0, samples);
+        self.input.fill_buffer(env, &mut input, samples);
 
         for i in 0..samples {
             let v0 = input[i];
@@ -86,7 +86,7 @@ impl<'a> ValueNode for RLPF<'a> {
             let out = self.y0 + 2.0 * self.y1 + self.y2;
             self.y2 = self.y1;
             self.y1 = self.y0;
-            buffer[offset+i] = out;
+            buffer[i] = out;
         }
     }
 }
@@ -112,9 +112,9 @@ impl<'a, T: From<f64>> AllPass<'a, T> {
 
 impl<'a, T: Add<Output = T> + Mul<Output = T> + Neg<Output = T> + Into<f64> + Default + Copy> ValueNode for AllPass<'a, T> {
     type T = T;
-    fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], offset: usize, samples: usize) {
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], samples: usize) {
         let mut input: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
-        self.input.fill_buffer(env, &mut input, 0, samples);
+        self.input.fill_buffer(env, &mut input, samples);
 
         for i in 0..samples {
             let s_d = self.buff.pop_front().unwrap_or_else(|| T::default());
@@ -173,9 +173,9 @@ impl<'a> TrapezoidSVF<'a> {
 
     fn parameters(&mut self, env: &Env, samples: usize) -> Vec<(f64, f64, f64, f64)> {
         let mut frequency: Vec<f64> = vec![0.0; samples];
-        self.frequency.fill_buffer(env, &mut frequency, 0, samples);
+        self.frequency.fill_buffer(env, &mut frequency, samples);
         let mut q: Vec<f64> = vec![0.0; samples];
-        self.q.fill_buffer(env, &mut q, 0, samples);
+        self.q.fill_buffer(env, &mut q, samples);
 
         let mut result = vec![(0.0, 0.0, 0.0, 0.0); samples];
         for i in 0..samples {
@@ -225,9 +225,9 @@ impl<'a> TrapezoidSVF<'a> {
 
 impl<'a> ValueNode for TrapezoidSVF<'a> {
     type T = f64;
-    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
         let mut input: Vec<f64> = (0..samples).map(|_| Self::T::default()).collect();
-        self.input.fill_buffer(env, &mut input, 0, samples);
+        self.input.fill_buffer(env, &mut input, samples);
         let parameters = self.parameters(env, samples);
 
         for i in 0..samples {
@@ -240,7 +240,7 @@ impl<'a> ValueNode for TrapezoidSVF<'a> {
             self.ic1eq = 2.0*v1 - self.ic1eq;
             self.ic2eq = 2.0*v2 - self.ic2eq;
 
-            buffer[offset+i] = match self.filter_type {
+            buffer[i] = match self.filter_type {
                 FilterType::Low => v2,
                 FilterType::Band => v1,
                 FilterType::High => v0 - k*v1 - v2,
@@ -269,9 +269,9 @@ impl<T: Default, D: ValueNode<T=T>> Comb<D> {
 
 impl<T: Add<Output = T> + Copy + Default, D: ValueNode<T=T>> ValueNode for Comb<D> {
     type T = D::T;
-    fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], offset: usize, samples: usize) {
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], samples: usize) {
         let mut input: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
-        self.input.fill_buffer(env, &mut input, 0, samples);
+        self.input.fill_buffer(env, &mut input, samples);
 
         for (i, v0) in input.iter().enumerate() {
             self.buffer.push_back(*v0);

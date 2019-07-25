@@ -112,9 +112,9 @@ impl<'a> Sampler<'a> {
 
 impl<'a> ValueNode for Sampler<'a> {
     type T = f64;
-    fn fill_buffer(&mut self, _env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+    fn fill_buffer(&mut self, _env: &Env, buffer: &mut [Self::T], samples: usize) {
         for i in 0..samples {
-            buffer[offset+i] = if self.pos as usize >= self.samples.len() {
+            buffer[i] = if self.pos as usize >= self.samples.len() {
                 0.0
             } else {
                 let s = self.samples[self.pos as usize];

@@ -1,4 +1,4 @@
-#![feature(duration_float)]
+#![feature(duration_float, const_generics)]
 
 use std::time::Duration;
 

@@ -531,7 +531,7 @@ pub fn main() {
     let total_samples = env.sample_rate as usize*target_len;
     for _ in 0..total_samples / chunk_size {
         let mut buffer_left = vec![0.0; chunk_size];
-        sig.fill_buffer(&mut env, &mut buffer_left, 0, chunk_size);
+        sig.fill_buffer(&mut env, &mut buffer_left, chunk_size);
         env.time += Duration::from_millis((chunk_size * 1000) as u64 / env.sample_rate as u64);
         let amp = 0.25;
         for left in buffer_left {

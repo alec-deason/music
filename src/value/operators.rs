@@ -15,14 +15,14 @@ macro_rules! value_binary_operator {
             impl<'a, T: Default + Clone> ValueNode for Operator<'a, T>
                 where T: $operator_name<Output = T> + 'static {
                     type T = T;
-                    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+                    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
                         let mut a: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
-                        self.a.fill_buffer(env, &mut a, 0, samples);
+                        self.a.fill_buffer(env, &mut a, samples);
                         let mut b: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
-                        self.b.fill_buffer(env, &mut b, 0, samples);
+                        self.b.fill_buffer(env, &mut b, samples);
 
                         for i in 0..samples {
-                            buffer[offset + i] = a[i].clone() $operation b[i].clone();
+                            buffer[i] = a[i].clone() $operation b[i].clone();
                         }
                     }
             }
@@ -83,11 +83,11 @@ mod neg {
     }
     impl<'a, T: Default + Clone + Neg<Output = T>> ValueNode for Operator<'a, T> {
             type T = T;
-            fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+            fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
                 let mut v: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
-                self.v.fill_buffer(env, &mut v, 0, samples);
+                self.v.fill_buffer(env, &mut v, samples);
                 for i in 0..samples {
-                    buffer[offset + i] = -v[i].clone();
+                    buffer[i] = -v[i].clone();
                 }
             }
     }
@@ -114,11 +114,11 @@ mod not {
     }
     impl<'a, T: Default + Clone + Not<Output = T>> ValueNode for Operator<'a, T> {
             type T = T;
-            fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+            fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
                 let mut v: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
-                self.v.fill_buffer(env, &mut v, 0, samples);
+                self.v.fill_buffer(env, &mut v, samples);
                 for i in 0..samples {
-                    buffer[offset + i] = !v[i].clone();
+                    buffer[i] = !v[i].clone();
                 }
             }
     }

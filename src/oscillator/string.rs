@@ -1,10 +1,8 @@
-use std::collections::VecDeque;
-use rand::Rng;
 use rand::seq::SliceRandom;
 
 use crate::{
     value::{ValueNode, Value, CacheValue},
-    oscillator::{BrownianNoise, WaveTableSynth,},
+    oscillator::{WaveTableSynth,},
     filter::TrapezoidSVF,
     Env,
 };
@@ -37,7 +35,7 @@ impl PluckedString {
 
 impl ValueNode for PluckedString {
     type T = f64;
-    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+    fn fill_buffer(&mut self, _env: &Env, buffer: &mut [Self::T], samples: usize) {
         for i in 0..samples {
             let sample = self.smoothing * self.buffer[self.position] + (1.0 - self.smoothing) * self.previous;
             self.buffer[self.position] = sample;
@@ -73,9 +71,9 @@ impl<'a> DrivenString<'a> {
 
 impl<'a> ValueNode for DrivenString<'a> {
     type T = f64;
-    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], offset: usize, samples: usize) {
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
         let mut output: Vec<f64> = Vec::with_capacity(samples);
-        self.output.fill_buffer(env, &mut output, 0, samples);
-        buffer[offset..offset+samples].copy_from_slice(&output);
+        self.output.fill_buffer(env, &mut output, samples);
+        buffer[0..samples].copy_from_slice(&output);
     }
 }
