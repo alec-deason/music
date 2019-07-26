@@ -1,6 +1,8 @@
-use std::ops::{Add, Mul, Neg};
+use std::ops::{Add, Mul, Neg, Sub};
 use std::collections::VecDeque;
 use std::f64::consts::PI;
+
+use num::Zero;
 
 use crate::{
     value::{ValueNode, Value},
@@ -8,8 +10,8 @@ use crate::{
 };
 
 
-pub struct RLPF<'a> {
-    input: Value<'a, f64>,
+pub struct RLPF<'a, T> {
+    input: Value<'a, T>,
     cutoff: Value<'a, f64>,
     q: Value<'a, f64>,
     cached_cutoff: f64,
@@ -19,13 +21,13 @@ pub struct RLPF<'a> {
     b1: f64,
     b2: f64,
 
-    y0: f64,
-    y1: f64,
-    y2: f64,
+    y0: T,
+    y1: T,
+    y2: T,
 }
 
-impl<'a> RLPF<'a> {
-    pub fn new(input: impl Into<Value<'a, f64>>, cutoff: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
+impl<'a, T: Copy + Default> RLPF<'a, T> {
+    pub fn new(input: impl Into<Value<'a, T>>, cutoff: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
         RLPF {
             input: input.into(),
             cutoff: cutoff.into(),
@@ -36,9 +38,9 @@ impl<'a> RLPF<'a> {
             b1: std::f64::NAN,
             b2: std::f64::NAN,
 
-            y0: 0.0,
-            y1: 0.0,
-            y2: 0.0,
+            y0: T::default(),
+            y1: T::default(),
+            y2: T::default(),
         }
     }
 
@@ -71,19 +73,19 @@ impl<'a> RLPF<'a> {
 }
 
 
-impl<'a> ValueNode for RLPF<'a> {
-    type T = f64;
+impl<'a, T: Copy + Default + Add<Output=T> + Mul<Output=T> + From<f64>> ValueNode for RLPF<'a, T> {
+    type T = T;
     fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
         let parameters = self.parameters(env, samples);
-        let mut input: Vec<f64> = (0..samples).map(|_| Self::T::default()).collect();
+        let mut input: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
         self.input.fill_buffer(env, &mut input, samples);
 
         for i in 0..samples {
             let v0 = input[i];
             let (a0, b1, b2) = parameters[i];
 
-            self.y0 = a0 * v0 + b1 * self.y1 + b2 * self.y2;
-            let out = self.y0 + 2.0 * self.y1 + self.y2;
+            self.y0 = v0 * a0.into() + self.y1 * b1.into() + self.y2 * b2.into();
+            let out = self.y0 + self.y1 * 2.0.into() + self.y2;
             self.y2 = self.y1;
             self.y1 = self.y0;
             buffer[i] = out;
@@ -110,7 +112,7 @@ impl<'a, T: From<f64>> AllPass<'a, T> {
     }
 }
 
-impl<'a, T: Add<Output = T> + Mul<Output = T> + Neg<Output = T> + Into<f64> + Default + Copy> ValueNode for AllPass<'a, T> {
+impl<'a, T: Copy + Add<Output = T> + Mul<Output = T> + Neg<Output = T> + Default> ValueNode for AllPass<'a, T> {
     type T = T;
     fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], samples: usize) {
         let mut input: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
@@ -135,8 +137,8 @@ enum FilterType {
     All,
 }
 
-pub struct TrapezoidSVF<'a> {
-    input: Value<'a, f64>,
+pub struct TrapezoidSVF<'a, T> {
+    input: Value<'a, T>,
     frequency: Value<'a, f64>,
     cached_frequency: f64, 
     q: Value<'a, f64>,
@@ -147,13 +149,13 @@ pub struct TrapezoidSVF<'a> {
     a2: f64,
     a3: f64,
 
-    ic1eq: f64,
-    ic2eq: f64,
+    ic1eq: T,
+    ic2eq: T,
 }
 
 //From: http://www.cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf
-impl<'a> TrapezoidSVF<'a> {
-    fn new(filter_type: FilterType, input: impl Into<Value<'a, f64>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
+impl<'a, T: Zero> TrapezoidSVF<'a, T> {
+    fn new(filter_type: FilterType, input: impl Into<Value<'a, T>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
         TrapezoidSVF {
             input: input.into(),
             frequency: frequency.into(),
@@ -166,8 +168,8 @@ impl<'a> TrapezoidSVF<'a> {
             a2: std::f64::NAN,
             a3: std::f64::NAN,
 
-            ic1eq: 0.0,
-            ic2eq: 0.0,
+            ic1eq: T::zero(),
+            ic2eq: T::zero(),
         }
     }
 
@@ -198,35 +200,35 @@ impl<'a> TrapezoidSVF<'a> {
         result
     }
 
-    pub fn low_pass(input: impl Into<Value<'a, f64>>, cutoff: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
+    pub fn low_pass(input: impl Into<Value<'a, T>>, cutoff: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
         Self::new(FilterType::Low, input, cutoff, q)
     }
 
-    pub fn band(input: impl Into<Value<'a, f64>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
+    pub fn band(input: impl Into<Value<'a, T>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
         Self::new(FilterType::Band, input, frequency, q)
     }
 
-    pub fn high(input: impl Into<Value<'a, f64>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
+    pub fn high(input: impl Into<Value<'a, T>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
         Self::new(FilterType::High, input, frequency, q)
     }
 
-    pub fn notch(input: impl Into<Value<'a, f64>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
+    pub fn notch(input: impl Into<Value<'a, T>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
         Self::new(FilterType::Notch, input, frequency, q)
     }
 
-    pub fn peak(input: impl Into<Value<'a, f64>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
+    pub fn peak(input: impl Into<Value<'a, T>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
         Self::new(FilterType::Peak, input, frequency, q)
     }
 
-    pub fn all(input: impl Into<Value<'a, f64>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
+    pub fn all(input: impl Into<Value<'a, T>>, frequency: impl Into<Value<'a, f64>>, q: impl Into<Value<'a, f64>>) -> Self {
         Self::new(FilterType::All, input, frequency, q)
     }
 }
 
-impl<'a> ValueNode for TrapezoidSVF<'a> {
-    type T = f64;
+impl<'a, T: Copy + Zero + Default + Sub<Output=T> + Mul<Output=T> + From<f64>> ValueNode for TrapezoidSVF<'a, T> {
+    type T = T;
     fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
-        let mut input: Vec<f64> = (0..samples).map(|_| Self::T::default()).collect();
+        let mut input: Vec<T> = (0..samples).map(|_| Self::T::zero()).collect();
         self.input.fill_buffer(env, &mut input, samples);
         let parameters = self.parameters(env, samples);
 
@@ -235,18 +237,18 @@ impl<'a> ValueNode for TrapezoidSVF<'a> {
             let v0 = input[i];
 
             let v3 = v0 - self.ic2eq;
-            let v1 = a1*self.ic1eq + a2*v3;
-            let v2 = self.ic2eq + a2*self.ic1eq + a3*v3;
-            self.ic1eq = 2.0*v1 - self.ic1eq;
-            self.ic2eq = 2.0*v2 - self.ic2eq;
+            let v1 = self.ic1eq*a1.into() + v3*a2.into();
+            let v2 = self.ic2eq + self.ic1eq*a2.into() + v3*a3.into();
+            self.ic1eq = v1*2.0.into() - self.ic1eq;
+            self.ic2eq = v2*2.0.into() - self.ic2eq;
 
             buffer[i] = match self.filter_type {
                 FilterType::Low => v2,
                 FilterType::Band => v1,
-                FilterType::High => v0 - k*v1 - v2,
-                FilterType::Notch => v0 - k*v1,
-                FilterType::Peak => 2.0*v2 - v0 + k*v1,
-                FilterType::All => v0 - 2.0*k*v1,
+                FilterType::High => v0 - v1*k.into() - v2,
+                FilterType::Notch => v0 - v1*k.into(),
+                FilterType::Peak => v2*2.0.into() - v0 + v1*k.into(),
+                FilterType::All => v0 - v1*(k*2.0).into(),
             };
         }
     }

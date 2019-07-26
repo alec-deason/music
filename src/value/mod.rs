@@ -1,9 +1,12 @@
+use std::marker::PhantomData;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::time::Duration;
 
 mod operators;
+mod multisample;
 pub use operators::*;
+pub use multisample::*;
 
 use super::Env;
 
@@ -22,6 +25,24 @@ impl<'a, T: Default, D: ValueNode<T=T> + 'a> From<D> for Value<'a, T> {
 impl<'a, T: Default> Value<'a, T> {
     pub fn fill_buffer(&mut self, env: &Env, buffer: &mut [T], samples: usize) {
         self.0.fill_buffer(env, buffer, samples);
+    }
+}
+
+pub struct ValueConverter<'a, A, B>(Value<'a, A>, PhantomData<B>);
+impl<'a, A, B> ValueConverter<'a, A, B> {
+    pub fn new(other: impl Into<Value<'a, A>>) -> Self {
+        ValueConverter(other.into(), PhantomData)
+    }
+}
+
+impl<'a, A: Copy+Default, B: From<A>> ValueNode for ValueConverter<'a, A, B> {
+    type T = B;
+    fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
+        let mut pre_buffer: Vec<A> = (0..samples).map(|_| A::default()).collect();
+        self.0.fill_buffer(env, &mut pre_buffer, samples);
+        for (i, s) in pre_buffer.iter().enumerate() {
+            buffer[i] = (*s).into();
+        }
     }
 }
 

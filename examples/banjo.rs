@@ -519,9 +519,15 @@ pub fn main() {
         let mut pluck: Value<f64> = PluckedString::new(note.frequency / 8.0, 0.09).into();
         RLPF::new(pluck, 1000.0, 0.1).into()
     };
-    let mut sig: Value<f64> = render_voice(composition.voice(melody).unwrap(), &play_banjo, beat) * 1.0;
+    let mut sig: Value<MultiSample<f64>> = hass_shift(
+        render_voice(composition.voice(melody).unwrap(), &play_banjo, beat) * 1.0,
+        0.3/1000.0,
+    );
     //sig = sig + render_voice(composition.voice(accompanyment).unwrap(), &play_trumpet, beat) * 1.5;
-    sig = sig + render_voice(composition.voice(bass).unwrap(), &play_double_bass, beat) * 0.7;
+    sig = sig + hass_shift(
+          render_voice(composition.voice(bass).unwrap(), &play_double_bass, beat) * 0.7,
+          -0.1/1000.0,
+    );
     
     sig = Reverb::new(sig, 0.9, 0.1, 1000.0, 2.0).into();
 
@@ -530,13 +536,13 @@ pub fn main() {
     let chunk_size = 1024;
     let total_samples = env.sample_rate as usize*target_len;
     for _ in 0..total_samples / chunk_size {
-        let mut buffer_left = vec![0.0; chunk_size];
+        let mut buffer_left = vec![MultiSample(0.0, 0.0); chunk_size];
         sig.fill_buffer(&mut env, &mut buffer_left, chunk_size);
         env.time += Duration::from_millis((chunk_size * 1000) as u64 / env.sample_rate as u64);
         let amp = 0.25;
-        for left in buffer_left {
-            io::stdout().write_f32::<LittleEndian>(left as f32 * amp).unwrap();    
-            io::stdout().write_f32::<LittleEndian>(left as f32 * amp).unwrap();
+        for sample in buffer_left {
+            io::stdout().write_f32::<LittleEndian>(sample.0 as f32 * amp).unwrap();    
+            io::stdout().write_f32::<LittleEndian>(sample.1 as f32 * amp).unwrap();
         }
     }
 }

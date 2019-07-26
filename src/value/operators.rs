@@ -7,13 +7,13 @@ macro_rules! value_binary_operator {
                 value::{ValueNode, Value},
                 Env,
             };
-            pub struct Operator<'a, T> {
+            struct Operator<'a, T> {
                 a: Value<'a, T>,
                 b: Value<'a, T>,
             }
 
             impl<'a, T: Default + Clone> ValueNode for Operator<'a, T>
-                where T: $operator_name<Output = T> + 'static {
+                where T: $operator_name<Output = T> + 'a {
                     type T = T;
                     fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
                         let mut a: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
@@ -27,7 +27,7 @@ macro_rules! value_binary_operator {
                     }
             }
 
-            impl<'a, T: $operator_name<Output = T> + Default + Clone + 'static, D: Into<Value<'a, T>>> $operator_name<D> for Value<'a, T> {
+            impl<'a, T: $operator_name<Output = T> + Default + Clone + 'a, D: Into<Value<'a, T>>> $operator_name<D> for Value<'a, T> {
                 type Output = Value<'a, T>;
 
                 #[inline]
@@ -78,7 +78,7 @@ mod neg {
         value::{ValueNode, Value},
         Env,
     };
-    pub struct Operator<'a, T> {
+    struct Operator<'a, T> {
         v: Value<'a, T>,
     }
     impl<'a, T: Default + Clone + Neg<Output = T>> ValueNode for Operator<'a, T> {
@@ -91,7 +91,7 @@ mod neg {
                 }
             }
     }
-    impl<'a, T: Default + Clone + Neg<Output = T> + 'static> Neg for Value<'a, T>
+    impl<'a, T: Default + Clone + Neg<Output = T> + 'a> Neg for Value<'a, T>
         where T: Neg<Output = T> {
         type Output = Value<'a, T>;
 
@@ -109,7 +109,7 @@ mod not {
         value::{ValueNode, Value},
         Env,
     };
-    pub struct Operator<'a, T> {
+    struct Operator<'a, T> {
         v: Value<'a, T>,
     }
     impl<'a, T: Default + Clone + Not<Output = T>> ValueNode for Operator<'a, T> {
@@ -122,9 +122,9 @@ mod not {
                 }
             }
     }
-    impl<'a, T: Clone + Not<Output = T> + 'static> Not for Value<'a, T>
+    impl<'a, T: Default + Clone + Not<Output = T> + 'a> Not for Value<'a, T>
         where T: Not<Output = T> {
-        type Output = Operator<'a, T>;
+        type Output = Value<'a, T>;
 
         fn not(self) -> Self::Output {
             Operator {

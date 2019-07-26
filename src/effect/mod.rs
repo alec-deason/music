@@ -1,9 +1,10 @@
-use num::Num;
+use std::ops::{Add, Mul, Sub, Neg};
 use std::collections::VecDeque;
 use std::clone::Clone;
+use num::{Num, Zero, One};
 
 use crate::{
-    value::{ValueNode, CacheValue, Value},
+    value::{ValueNode, CacheValue, Value, ValueConverter},
     filter::{AllPass, RLPF, TrapezoidSVF},
     oscillator::BrownianNoise,
     Env,
@@ -12,15 +13,16 @@ use crate::{
 pub struct Delay<'a, T> {
     input: Value<'a, T>,
     buffer: VecDeque<T>,
-    delay: Value<'a, f64>,
 }
 
-impl<'a, T: Into<f64>> Delay<'a, T> {
-    pub fn new(input: impl Into<Value<'a, T>>, delay: impl Into<Value<'a, f64>>) -> Self {
+impl<'a, T: Default> Delay<'a, T> {
+    pub fn new(input: impl Into<Value<'a, T>>, delay: f64) -> Self {
+        let capacity = (44100.0 * delay) as usize;
+        let mut buffer = VecDeque::with_capacity(capacity);
+        buffer.resize_with(capacity, || T::default());
         Delay {
             input: input.into(),
-            buffer: VecDeque::new(),
-            delay: delay.into(),
+            buffer: buffer,
         }
     }
 }
@@ -29,30 +31,24 @@ impl<'a, T: Into<f64>> Delay<'a, T> {
 impl<'a, T: Default + Clone> ValueNode for Delay<'a, T> {
     type T = T;
     fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
-        let mut delay: Vec<f64> = vec![0.0; samples];
-        self.delay.fill_buffer(env, &mut delay, samples);
         let mut input: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
         self.input.fill_buffer(env, &mut input, samples);
         for i in 0..samples {
-            let idx = (delay[i] * env.sample_rate as f64) as usize + i;
-            if idx >= self.buffer.len() {
-                self.buffer.resize_with(idx + 1, || T::default());
-            }
-            self.buffer[idx] = input[i].clone();
+            self.buffer.push_back(input[i].clone());
             buffer[i] = self.buffer.pop_front().unwrap_or_else(|| T::default());
         }
     }
 }
 
-pub struct Reverb<'a> {
-    output: Value<'a, f64>,
+pub struct Reverb<'a, T> {
+    output: Value<'a, T>,
 }
 
-impl<'a> Reverb<'a> {
-    pub fn new(input: impl Into<Value<'a, f64>>, mix: f64, predelay: f64, lpf: f64, revtime: f64) -> Self {
+impl<'a, T: Copy + Default + Zero + One + Into<Value<'a, T>> + From<f64> + Neg<Output=T> + Add<Output=T> + Mul<Output=T> + Sub<Output=T> + 'a> Reverb<'a, T> {
+    pub fn new(input: impl Into<Value<'a, T>>, mix: f64, predelay: f64, lpf: f64, revtime: f64) -> Self {
         let dry = CacheValue::new(input);
-        let mut temp: Value<f64> = Delay::new(dry.clone(), predelay).into();
-        let mut wet: Value<f64> = 0.0.into();
+        let mut temp: Value<T> = Delay::new(dry.clone(), predelay).into();
+        let mut wet: Value<T> = T::zero().into();
         let things = vec![0.038045169615104804, 0.02999076016847762, 0.04963873923379772, 0.04368894979626656, 0.007460425959828037, 0.02817080130412364, 0.00657126832222354, 0.04779429369666802, 0.004010513054838128, 0.01541601071664956, 0.011602441530870984, 0.0012122872292874213, 0.025404225677194647, 0.0017341472693168261, 0.01003645759720834, 0.04604357296027947];
 
         for r in things {
@@ -60,11 +56,12 @@ impl<'a> Reverb<'a> {
             let cache = CacheValue::new(
                 RLPF::new(ltemp, lpf, 50.0)
             );
-            wet = wet + Value::<f64>::from(cache.clone());
+            wet = wet + Value::<T>::from(cache.clone());
             temp = cache.into();
         }
 
-        let output: Value<_> = Value::<f64>::from(dry) * Value::<f64>::from(mix) + wet * (Value::<f64>::from(1.0) - Value::<f64>::from(mix));
+        let mut output: Value<_> = Value::<T>::from(dry) * T::from(mix);
+        output = output + wet * (T::one().into() - T::from(mix));
 
 
         Reverb {
@@ -74,8 +71,8 @@ impl<'a> Reverb<'a> {
 }
 
 
-impl<'a> ValueNode for Reverb<'a> {
-    type T = f64;
+impl<'a, T: Default> ValueNode for Reverb<'a, T> {
+    type T = T;
     fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
         self.output.fill_buffer(env, buffer, samples);
     }
