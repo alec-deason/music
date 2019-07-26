@@ -2,14 +2,14 @@
 
 use std::time::Duration;
 
-pub mod value;
-pub mod oscillator;
-pub mod filter;
-pub mod envelope;
-pub mod effect;
-pub mod sequence;
-pub mod note;
 pub mod composition;
+pub mod effect;
+pub mod envelope;
+pub mod filter;
+pub mod note;
+pub mod oscillator;
+pub mod sequence;
+pub mod value;
 
 #[derive(Clone, Debug)]
 pub struct Env {

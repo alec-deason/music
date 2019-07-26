@@ -1,17 +1,16 @@
-use std::ops::Add;
-use std::time::Duration;
-use std::collections::VecDeque;
 use crate::{
-    value::{ValueNode, Value},
+    value::{Value, ValueNode},
     Env,
 };
+use std::collections::VecDeque;
+use std::ops::Add;
+use std::time::Duration;
 
 pub struct Note {
     pub duration: Duration,
     pub amplitude: f64,
     pub frequency: f64,
 }
-
 
 pub struct FancySequence<'a, S, T> {
     state: S,
@@ -22,7 +21,10 @@ pub struct FancySequence<'a, S, T> {
 }
 
 impl<'a, S, T> FancySequence<'a, S, T> {
-    pub fn new<F: Fn(&mut S) -> Option<(Duration, Value<'a, T>)> + 'a>(initial_state: S, generator: F) -> Self {
+    pub fn new<F: Fn(&mut S) -> Option<(Duration, Value<'a, T>)> + 'a>(
+        initial_state: S,
+        generator: F,
+    ) -> Self {
         Self {
             state: initial_state,
             generator: Box::new(generator),
@@ -31,15 +33,15 @@ impl<'a, S, T> FancySequence<'a, S, T> {
             samples_remaining: 0,
         }
     }
-
-
 }
-pub fn sequence_from_iterator<'a, T, I: IntoIterator<Item = (Duration, Value<'a, T>)> + 'a>(iter: I) -> FancySequence<'a, Box<dyn Iterator<Item = (Duration, Value<'a, T>)> + 'a>, T> {
+pub fn sequence_from_iterator<'a, T, I: IntoIterator<Item = (Duration, Value<'a, T>)> + 'a>(
+    iter: I,
+) -> FancySequence<'a, Box<dyn Iterator<Item = (Duration, Value<'a, T>)> + 'a>, T> {
     let iterator = Box::new(iter.into_iter());
     FancySequence::new(iterator, |iterator| iterator.next())
 }
 
-impl<'a, S, T: Default + Add<Output=T> + Clone> ValueNode for FancySequence<'a, S, T> {
+impl<'a, S, T: Default + Add<Output = T> + Clone> ValueNode for FancySequence<'a, S, T> {
     type T = T;
     fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
         if self.samples_remaining == 0 {

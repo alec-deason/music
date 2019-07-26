@@ -26,22 +26,35 @@ macro_rules! pitch_impl {
 pitch_impl!(usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
 
 pub fn parse_roman_numeral_notation(src: &str) -> (usize, Vec<usize>) {
-    let re = Regex::new(r"(?P<minor>[iv]{1,3})|(?P<major>[IV]{1,3})(?P<augmentation>[ᐤᐩ])?(?P<added_note>[⁰-⁹])?").unwrap();
+    let re = Regex::new(
+        r"(?P<minor>[iv]{1,3})|(?P<major>[IV]{1,3})(?P<augmentation>[ᐤᐩ])?(?P<added_note>[⁰-⁹])?",
+    )
+    .unwrap();
     let caps = re.captures(src).unwrap();
-    if caps.name("added_note").is_some() { unimplemented!() }
+    if caps.name("added_note").is_some() {
+        unimplemented!()
+    }
     let semitones = if caps.name("augmentation").is_some() {
         match caps.name("augmentation").unwrap().as_str() {
-            "ᐤ"  => vec![0, 3, 6], //Diminished minor
-            "+"  => vec![0, 4, 8], //Augmented major
+            "ᐤ" => vec![0, 3, 6], //Diminished minor
+            "+" => vec![0, 4, 8],   //Augmented major
             _ => panic!(),
         }
     } else if caps.name("major").is_some() {
         vec![0, 4, 7]
     } else if caps.name("minor").is_some() {
         vec![0, 3, 7]
-    } else { panic!() };
+    } else {
+        panic!()
+    };
 
-    let degree = match caps.name("major").unwrap_or_else(|| caps.name("minor").unwrap()).as_str().to_uppercase().as_str() {
+    let degree = match caps
+        .name("major")
+        .unwrap_or_else(|| caps.name("minor").unwrap())
+        .as_str()
+        .to_uppercase()
+        .as_str()
+    {
         "I" => 0,
         "II" => 1,
         "III" => 2,
@@ -69,10 +82,7 @@ pub enum Pattern {
 
 impl Scale {
     pub fn new(scale_type: Pattern, root: u32) -> Self {
-        Self {
-            scale_type,
-            root,
-        }
+        Self { scale_type, root }
     }
 
     pub fn major(root: u32) -> Self {
@@ -97,8 +107,8 @@ impl Scale {
     pub fn triad(&self, degree: i32) -> Vec<u32> {
         vec![
             self.pitch(degree),
-            self.pitch(degree+2),
-            self.pitch(degree+4),
+            self.pitch(degree + 2),
+            self.pitch(degree + 4),
         ]
     }
 
@@ -140,6 +150,6 @@ impl Scale {
         for step in self.pattern().iter().take(degree as usize) {
             semitone += *step as i32;
         }
-        (semitone + octave*12) as u32
+        (semitone + octave * 12) as u32
     }
 }

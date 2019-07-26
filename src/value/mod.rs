@@ -1,12 +1,12 @@
+use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
-use std::cell::RefCell;
 use std::time::Duration;
 
-mod operators;
 mod multisample;
-pub use operators::*;
+mod operators;
 pub use multisample::*;
+pub use operators::*;
 
 use super::Env;
 
@@ -15,8 +15,8 @@ pub trait ValueNode {
     fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize);
 }
 
-pub struct Value<'a, T>(Box<dyn ValueNode<T=T> + 'a>);
-impl<'a, T: Default, D: ValueNode<T=T> + 'a> From<D> for Value<'a, T> {
+pub struct Value<'a, T>(Box<dyn ValueNode<T = T> + 'a>);
+impl<'a, T: Default, D: ValueNode<T = T> + 'a> From<D> for Value<'a, T> {
     fn from(node: D) -> Self {
         Value(Box::new(node))
     }
@@ -35,7 +35,7 @@ impl<'a, A, B> ValueConverter<'a, A, B> {
     }
 }
 
-impl<'a, A: Copy+Default, B: From<A>> ValueNode for ValueConverter<'a, A, B> {
+impl<'a, A: Copy + Default, B: From<A>> ValueNode for ValueConverter<'a, A, B> {
     type T = B;
     fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
         let mut pre_buffer: Vec<A> = (0..samples).map(|_| A::default()).collect();
@@ -53,7 +53,7 @@ struct CacheValueState<T> {
 
 pub struct CacheValue<'a, T> {
     value: Rc<RefCell<Value<'a, T>>>,
-    state: Rc<RefCell<CacheValueState<T>>>
+    state: Rc<RefCell<CacheValueState<T>>>,
 }
 
 impl<'a, T> Clone for CacheValue<'a, T> {
@@ -76,7 +76,6 @@ impl<'a, T> CacheValue<'a, T> {
         }
     }
 }
-
 
 impl<'a, T: Clone + Default> ValueNode for CacheValue<'a, T> {
     type T = T;

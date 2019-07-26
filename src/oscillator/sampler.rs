@@ -1,14 +1,14 @@
-use std::path::Path;
 use std::fs;
 use std::fs::File;
+use std::path::Path;
 
-use minimp3::{Decoder, Frame, Error};
+use minimp3::{Decoder, Error, Frame};
 use regex::Regex;
 
 use crate::{
-    Env,
-    value::{Value, ValueNode},
     note::Pitch,
+    value::{Value, ValueNode},
+    Env,
 };
 
 pub struct SampleSet {
@@ -21,7 +21,13 @@ impl SampleSet {
         for entry in fs::read_dir(path.as_ref()).unwrap() {
             let entry = entry.unwrap();
             if let Some(captures) = pattern.captures(entry.path().to_str().unwrap()) {
-                let note = match captures.name("note").unwrap().as_str().to_uppercase().as_str() {
+                let note = match captures
+                    .name("note")
+                    .unwrap()
+                    .as_str()
+                    .to_uppercase()
+                    .as_str()
+                {
                     "C" => 0,
                     "CS" => 1,
                     "C#" => 1,
@@ -41,16 +47,22 @@ impl SampleSet {
                     "B" => 11,
                     _ => panic!(),
                 };
-                let octave = captures.name("octave").unwrap().as_str().parse::<u32>().unwrap();
-                let adjusted_note = note + (octave+1)*12;
+                let octave = captures
+                    .name("octave")
+                    .unwrap()
+                    .as_str()
+                    .parse::<u32>()
+                    .unwrap();
+                let adjusted_note = note + (octave + 1) * 12;
 
-                samples.push(((adjusted_note as f64).frequency_from_midi(), Self::samples_from_file(entry.path())));
+                samples.push((
+                    (adjusted_note as f64).frequency_from_midi(),
+                    Self::samples_from_file(entry.path()),
+                ));
             }
         }
 
-        Self {
-            samples,
-        }
+        Self { samples }
     }
 
     fn samples_from_file(path: impl AsRef<Path>) -> Vec<f64> {
@@ -58,11 +70,20 @@ impl SampleSet {
         let mut sample = vec![];
         loop {
             match decoder.next_frame() {
-                Ok(Frame { data, sample_rate, channels, .. }) => {
-                    if channels != 1 { panic!() }
-                    if sample_rate != 44100 { panic!() }
+                Ok(Frame {
+                    data,
+                    sample_rate,
+                    channels,
+                    ..
+                }) => {
+                    if channels != 1 {
+                        panic!()
+                    }
+                    if sample_rate != 44100 {
+                        panic!()
+                    }
                     sample.extend(data.iter().cloned().map(|s| s as f64 / 65536.0));
-                },
+                }
                 Err(Error::Eof) => break,
                 Err(e) => panic!("{:?}", e),
             }
@@ -88,13 +109,12 @@ impl SampleSet {
             1.0
         };
 
-
         Some(Sampler::new(samples, rate).into())
     }
 }
 
 struct Sampler<'a> {
-    samples: &'a[f64],
+    samples: &'a [f64],
     pos: f64,
     rate: f64,
 }
@@ -108,7 +128,6 @@ impl<'a> Sampler<'a> {
         }
     }
 }
-
 
 impl<'a> ValueNode for Sampler<'a> {
     type T = f64;

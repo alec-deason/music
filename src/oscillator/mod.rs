@@ -1,34 +1,46 @@
-pub mod string;
 pub mod sampler;
+pub mod string;
 
-use std::f64::consts::PI;
 use rand::Rng;
+use std::f64::consts::PI;
 
 use lazy_static::lazy_static;
 
 use super::{
-    value::{ValueNode, Value},
+    value::{Value, ValueNode},
     Env,
 };
 
 lazy_static! {
     static ref SINE: Vec<(f64, Vec<f64>)> = {
         let len = 512;
-        vec![(2200.0, 
-        (0..len).map(|i| (i as f64 * ((PI*2.0)/len as f64)).sin()).collect()
+        vec![(
+            2200.0,
+            (0..len)
+                .map(|i| (i as f64 * ((PI * 2.0) / len as f64)).sin())
+                .collect(),
         )]
     };
     static ref SQUARE: Vec<(f64, Vec<f64>)> = {
         let len = 512;
-        vec![(22000.0,
-        (0..len).map(|i| if i as f64 * ((PI*2.0)/len as f64).sin() > 0.0 { 1.0 } else { -1.0 }).collect()
+        vec![(
+            22000.0,
+            (0..len)
+                .map(|i| {
+                    if i as f64 * ((PI * 2.0) / len as f64).sin() > 0.0 {
+                        1.0
+                    } else {
+                        -1.0
+                    }
+                })
+                .collect(),
         )]
     };
     static ref SAW_BL: Vec<(f64, Vec<f64>)> = {
         let mut tables = vec![];
         let len = 512;
         let f = 1.0;
-        let mut max_f = f*15.0;
+        let mut max_f = f * 15.0;
         while max_f <= 22050.0 {
             let mut table = vec![0.0; len];
             let mut partial = f;
@@ -36,16 +48,16 @@ lazy_static! {
             while partial < max_f {
                 let a = 1.0 / pi as f64;
                 for i in 0..len {
-                    table[i] += (((2.0*PI) / len as f64) * partial * i as f64).sin() * a * 0.5;
+                    table[i] += (((2.0 * PI) / len as f64) * partial * i as f64).sin() * a * 0.5;
                 }
                 partial += f;
                 pi += 1;
             }
-            let tf = (44100.0*44100.0)/(2.0*max_f*len as f64);
+            let tf = (44100.0 * 44100.0) / (2.0 * max_f * len as f64);
             tables.push((tf, table.iter().rev().cloned().collect()));
             max_f *= 2.0;
         }
-        tables.sort_by_key(|t| (t.0*1000.0) as u32);
+        tables.sort_by_key(|t| (t.0 * 1000.0) as u32);
         tables
     };
     static ref SAW: Vec<(f64, Vec<f64>)> = {
@@ -119,7 +131,6 @@ impl<'a, T: Default + Clone + Into<f64> + From<f64>> ValueNode for WaveTableSynt
     }
 }
 
-
 #[derive(Copy, Clone, Debug)]
 pub struct Impulses {
     freq: f64,
@@ -127,9 +138,7 @@ pub struct Impulses {
 
 impl Impulses {
     pub fn new(freq: f64) -> Self {
-        Self {
-            freq,
-        }
+        Self { freq }
     }
 }
 impl ValueNode for Impulses {
@@ -182,7 +191,7 @@ impl<'a, T: Default + Clone + From<f64> + Into<f64>> ValueNode for BrownianNoise
         self.wiggle.fill_buffer(env, &mut wiggle, samples);
 
         for i in 0..samples {
-            let wiggle:f64 = wiggle[i].clone().into();
+            let wiggle: f64 = wiggle[i].clone().into();
             let freq: f64 = freq[i].clone().into();
             if rand::thread_rng().gen::<f64>() < freq / env.sample_rate as f64 {
                 let wiggle = wiggle.max(0.00001);

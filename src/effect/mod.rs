@@ -1,12 +1,12 @@
-use std::ops::{Add, Mul, Sub, Neg};
-use std::collections::VecDeque;
+use num::{Num, One, Zero};
 use std::clone::Clone;
-use num::{Num, Zero, One};
+use std::collections::VecDeque;
+use std::ops::{Add, Mul, Neg, Sub};
 
 use crate::{
-    value::{ValueNode, CacheValue, Value, ValueConverter},
-    filter::{AllPass, RLPF, TrapezoidSVF},
+    filter::{AllPass, TrapezoidSVF, RLPF},
     oscillator::BrownianNoise,
+    value::{CacheValue, Value, ValueConverter, ValueNode},
     Env,
 };
 
@@ -27,7 +27,6 @@ impl<'a, T: Default> Delay<'a, T> {
     }
 }
 
-
 impl<'a, T: Default + Clone> ValueNode for Delay<'a, T> {
     type T = T;
     fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
@@ -44,18 +43,53 @@ pub struct Reverb<'a, T> {
     output: Value<'a, T>,
 }
 
-impl<'a, T: Copy + Default + Zero + One + Into<Value<'a, T>> + From<f64> + Neg<Output=T> + Add<Output=T> + Mul<Output=T> + Sub<Output=T> + 'a> Reverb<'a, T> {
-    pub fn new(input: impl Into<Value<'a, T>>, mix: f64, predelay: f64, lpf: f64, revtime: f64) -> Self {
+impl<
+        'a,
+        T: Copy
+            + Default
+            + Zero
+            + One
+            + Into<Value<'a, T>>
+            + From<f64>
+            + Neg<Output = T>
+            + Add<Output = T>
+            + Mul<Output = T>
+            + Sub<Output = T>
+            + 'a,
+    > Reverb<'a, T>
+{
+    pub fn new(
+        input: impl Into<Value<'a, T>>,
+        mix: f64,
+        predelay: f64,
+        lpf: f64,
+        revtime: f64,
+    ) -> Self {
         let dry = CacheValue::new(input);
         let mut temp: Value<T> = Delay::new(dry.clone(), predelay).into();
         let mut wet: Value<T> = T::zero().into();
-        let things = vec![0.038045169615104804, 0.02999076016847762, 0.04963873923379772, 0.04368894979626656, 0.007460425959828037, 0.02817080130412364, 0.00657126832222354, 0.04779429369666802, 0.004010513054838128, 0.01541601071664956, 0.011602441530870984, 0.0012122872292874213, 0.025404225677194647, 0.0017341472693168261, 0.01003645759720834, 0.04604357296027947];
+        let things = vec![
+            0.038045169615104804,
+            0.02999076016847762,
+            0.04963873923379772,
+            0.04368894979626656,
+            0.007460425959828037,
+            0.02817080130412364,
+            0.00657126832222354,
+            0.04779429369666802,
+            0.004010513054838128,
+            0.01541601071664956,
+            0.011602441530870984,
+            0.0012122872292874213,
+            0.025404225677194647,
+            0.0017341472693168261,
+            0.01003645759720834,
+            0.04604357296027947,
+        ];
 
         for r in things {
             let ltemp = AllPass::new(temp, r, revtime);
-            let cache = CacheValue::new(
-                RLPF::new(ltemp, lpf, 50.0)
-            );
+            let cache = CacheValue::new(RLPF::new(ltemp, lpf, 50.0));
             wet = wet + Value::<T>::from(cache.clone());
             temp = cache.into();
         }
@@ -63,13 +97,9 @@ impl<'a, T: Copy + Default + Zero + One + Into<Value<'a, T>> + From<f64> + Neg<O
         let mut output: Value<_> = Value::<T>::from(dry) * T::from(mix);
         output = output + wet * (T::one().into() - T::from(mix));
 
-
-        Reverb {
-            output: output,
-        }
+        Reverb { output: output }
     }
 }
-
 
 impl<'a, T: Default> ValueNode for Reverb<'a, T> {
     type T = T;
@@ -85,7 +115,11 @@ pub struct RingModulator<'a, T> {
 }
 
 impl<'a, T> RingModulator<'a, T> {
-    pub fn new(input: impl Into<Value<'a, T>>, modulator: impl Into<Value<'a, T>>, mix: impl Into<Value<'a, T>>) -> Self {
+    pub fn new(
+        input: impl Into<Value<'a, T>>,
+        modulator: impl Into<Value<'a, T>>,
+        mix: impl Into<Value<'a, T>>,
+    ) -> Self {
         Self {
             input: input.into(),
             modulator: modulator.into(),
@@ -93,7 +127,6 @@ impl<'a, T> RingModulator<'a, T> {
         }
     }
 }
-
 
 impl<'a, T: Copy + Num + Default> ValueNode for RingModulator<'a, T> {
     type T = T;
@@ -105,19 +138,23 @@ impl<'a, T: Copy + Num + Default> ValueNode for RingModulator<'a, T> {
         let mut mix: Vec<T> = (0..samples).map(|_| Self::T::default()).collect();
         self.mix.fill_buffer(env, &mut mix, samples);
 
-        buffer[0..samples].iter_mut().zip(input).zip(modulator).zip(mix).for_each(|(((b, v), modulator), mix)| {
-            *b = (T::one() - mix)*v + mix*modulator*v;
-        });
+        buffer[0..samples]
+            .iter_mut()
+            .zip(input)
+            .zip(modulator)
+            .zip(mix)
+            .for_each(|(((b, v), modulator), mix)| {
+                *b = (T::one() - mix) * v + mix * modulator * v;
+            });
     }
 }
-
 
 pub struct SoftClip<'a, T> {
     input: Value<'a, T>,
 }
 
 impl<'a, T> SoftClip<'a, T> {
-    pub fn new(input: impl  Into<Value<'a, T>>) -> Self {
+    pub fn new(input: impl Into<Value<'a, T>>) -> Self {
         Self {
             input: input.into(),
         }
@@ -131,7 +168,7 @@ impl<'a, T: Default + Into<f64> + From<f64>> ValueNode for SoftClip<'a, T> {
         self.input.fill_buffer(env, &mut input, samples);
         buffer[0..samples].iter_mut().zip(input).for_each(|(b, v)| {
             let v: f64 = v.into();
-            *b = (v - v.powf(3.0)/3.0).into();
+            *b = (v - v.powf(3.0) / 3.0).into();
         });
     }
 }

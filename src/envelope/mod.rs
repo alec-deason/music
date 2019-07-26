@@ -1,5 +1,5 @@
 use crate::{
-    value::{ValueNode, Value},
+    value::{Value, ValueNode},
     Env,
 };
 
@@ -67,7 +67,8 @@ impl<'a> From<ADSR> for Value<'a, f64> {
 
             active: true,
             clock: 0.0,
-        }.into()
+        }
+        .into()
     }
 }
 
@@ -91,13 +92,13 @@ impl ValueNode for RunningADSR {
                 let v = if self.clock < self.attack {
                     let d = self.attack - self.clock;
                     1.0 - (d / self.attack).powf(self.curve)
-                } else if self.clock < self.attack+self.decay {
-                    let d = (self.attack+self.decay) - self.clock;
+                } else if self.clock < self.attack + self.decay {
+                    let d = (self.attack + self.decay) - self.clock;
                     1.0 - (d / self.decay).powf(self.clock) * (1.0 - self.sustain_level)
-                } else if self.clock < self.attack+self.decay+self.duration {
+                } else if self.clock < self.attack + self.decay + self.duration {
                     self.sustain_level
                 } else {
-                    let d = (self.attack+self.decay+self.duration+self.release) - self.clock;
+                    let d = (self.attack + self.decay + self.duration + self.release) - self.clock;
                     (d / self.release).powf(self.curve) * self.sustain_level
                 };
                 self.clock += 1.0 / env.sample_rate as f64;

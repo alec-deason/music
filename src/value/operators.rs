@@ -56,7 +56,6 @@ macro_rules! value_binary_operator {
     }
 }
 
-
 //TODO: I take in idents for the assign versions of the operators but I couldn't figure out how to
 //actually implement those traits so I'm not currently using them.
 value_binary_operator!(Add, AddAssign, add, add_assign, +, usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
@@ -73,63 +72,63 @@ value_binary_operator!(Shr, ShrAssign, shr, shr_assign, >>, usize, u8, u16, u32,
 //TODO: I should be able to do these with a similar macro to the binary operators but I was having
 //trouble with types. It only saves a few lines of boilerplate anyway.
 mod neg {
-    use std::ops::Neg;
     use crate::{
-        value::{ValueNode, Value},
+        value::{Value, ValueNode},
         Env,
     };
+    use std::ops::Neg;
     struct Operator<'a, T> {
         v: Value<'a, T>,
     }
     impl<'a, T: Default + Clone + Neg<Output = T>> ValueNode for Operator<'a, T> {
-            type T = T;
-            fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
-                let mut v: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
-                self.v.fill_buffer(env, &mut v, samples);
-                for i in 0..samples {
-                    buffer[i] = -v[i].clone();
-                }
+        type T = T;
+        fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
+            let mut v: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
+            self.v.fill_buffer(env, &mut v, samples);
+            for i in 0..samples {
+                buffer[i] = -v[i].clone();
             }
+        }
     }
     impl<'a, T: Default + Clone + Neg<Output = T> + 'a> Neg for Value<'a, T>
-        where T: Neg<Output = T> {
+    where
+        T: Neg<Output = T>,
+    {
         type Output = Value<'a, T>;
 
         fn neg(self) -> Self::Output {
-            Operator {
-                v: self,
-            }.into()
+            Operator { v: self }.into()
         }
     }
 }
 
 mod not {
-    use std::ops::Not;
     use crate::{
-        value::{ValueNode, Value},
+        value::{Value, ValueNode},
         Env,
     };
+    use std::ops::Not;
     struct Operator<'a, T> {
         v: Value<'a, T>,
     }
     impl<'a, T: Default + Clone + Not<Output = T>> ValueNode for Operator<'a, T> {
-            type T = T;
-            fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
-                let mut v: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
-                self.v.fill_buffer(env, &mut v, samples);
-                for i in 0..samples {
-                    buffer[i] = !v[i].clone();
-                }
+        type T = T;
+        fn fill_buffer(&mut self, env: &Env, buffer: &mut [Self::T], samples: usize) {
+            let mut v: Vec<Self::T> = (0..samples).map(|_| Self::T::default()).collect();
+            self.v.fill_buffer(env, &mut v, samples);
+            for i in 0..samples {
+                buffer[i] = !v[i].clone();
             }
+        }
     }
     impl<'a, T: Default + Clone + Not<Output = T> + 'a> Not for Value<'a, T>
-        where T: Not<Output = T> {
+    where
+        T: Not<Output = T>,
+    {
         type Output = Value<'a, T>;
 
         fn not(self) -> Self::Output {
-            Operator {
-                v: self,
-            }.into()
+            Operator { v: self }.into()
         }
     }
 }
